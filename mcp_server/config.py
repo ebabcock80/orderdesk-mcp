@@ -4,7 +4,8 @@ import base64
 import os
 from typing import List, Optional
 
-from pydantic import BaseSettings, Field, validator
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -62,7 +63,8 @@ class Settings(BaseSettings):
         default=None, description="Test API key for integration tests"
     )
 
-    @validator("mcp_kms_key")
+    @field_validator("mcp_kms_key")
+    @classmethod
     def validate_kms_key(cls, v: str) -> str:
         """Validate that the KMS key is properly base64 encoded and at least 32 bytes."""
         try:
@@ -73,14 +75,16 @@ class Settings(BaseSettings):
         except Exception as e:
             raise ValueError(f"Invalid KMS key format: {e}")
 
-    @validator("allowed_origins", pre=True)
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
     def parse_allowed_origins(cls, v: str) -> List[str]:
         """Parse comma-separated allowed origins."""
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
-    @validator("log_level")
+    @field_validator("log_level")
+    @classmethod
     def validate_log_level(cls, v: str) -> str:
         """Validate log level."""
         valid_levels = ["debug", "info", "warning", "error", "critical"]
@@ -88,7 +92,8 @@ class Settings(BaseSettings):
             raise ValueError(f"Log level must be one of: {valid_levels}")
         return v.lower()
 
-    @validator("cache_backend")
+    @field_validator("cache_backend")
+    @classmethod
     def validate_cache_backend(cls, v: str) -> str:
         """Validate cache backend."""
         valid_backends = ["memory", "sqlite", "redis"]
@@ -96,11 +101,10 @@ class Settings(BaseSettings):
             raise ValueError(f"Cache backend must be one of: {valid_backends}")
         return v.lower()
 
-    class Config:
-        """Pydantic configuration."""
-
-        env_file = ".env"
-        case_sensitive = False
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False,
+    }
 
 
 # Global settings instance

@@ -62,5 +62,13 @@ class CryptoManager:
         return secrets.token_hex(32)
 
 
-# Global crypto manager instance
-crypto_manager = CryptoManager(settings.mcp_kms_key)
+# Global crypto manager instance (lazy initialization)
+crypto_manager = None
+
+def get_crypto_manager():
+    """Get the global crypto manager instance."""
+    global crypto_manager
+    if crypto_manager is None:
+        from mcp_server.config import settings
+        crypto_manager = CryptoManager(settings.mcp_kms_key)
+    return crypto_manager

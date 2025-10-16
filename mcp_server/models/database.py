@@ -72,24 +72,38 @@ class WebhookEvent(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
-# Database engine and session
-engine = create_engine(
-    settings.database_url,
-    echo=False,  # Set to True for SQL debugging
-    pool_pre_ping=True,
-)
+# Database engine and session (lazy initialization)
+engine = None
+SessionLocal = None
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+def get_engine():
+    """Get the database engine."""
+    global engine
+    if engine is None:
+        from mcp_server.config import settings
+        engine = create_engine(
+            settings.database_url,
+            echo=False,  # Set to True for SQL debugging
+            pool_pre_ping=True,
+        )
+    return engine
+
+def get_session_local():
+    """Get the session maker."""
+    global SessionLocal
+    if SessionLocal is None:
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
+    return SessionLocal
 
 
 def create_tables() -> None:
     """Create all database tables."""
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=get_engine())
 
 
 def get_db():
     """Get database session."""
-    db = SessionLocal()
+    db = get_session_local()()
     try:
         yield db
     finally:

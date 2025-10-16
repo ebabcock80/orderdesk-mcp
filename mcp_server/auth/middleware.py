@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from mcp_server.auth.crypto import crypto_manager
+from mcp_server.auth.crypto import get_crypto_manager
 from mcp_server.models.database import Tenant, get_db
 
 
@@ -25,6 +25,7 @@ async def get_tenant_from_master_key(
 ) -> Optional[Tenant]:
     """Get or create tenant from master key."""
     # Try to find existing tenant
+    crypto_manager = get_crypto_manager()
     for tenant in db.query(Tenant).all():
         if crypto_manager.verify_master_key(master_key, tenant.master_key_hash, tenant.salt):
             return tenant

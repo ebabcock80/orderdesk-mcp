@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml ./
+# Copy dependency files, LICENSE, and README
+COPY pyproject.toml LICENSE README.md ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -49,11 +49,11 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV PORT=8080
 
 # Entry point
-ENTRYPOINT ["uvicorn", "mcp_server.main:app", "--host", "0.0.0.0", "--port", "${PORT}"]
+ENTRYPOINT ["sh", "-c", "uvicorn mcp_server.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
