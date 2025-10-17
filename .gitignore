@@ -193,3 +193,5 @@ data/*.db-wal
 
 # Specification framework (if using .specify/)
 .specify/
+# Private specification files (keep local only)
+speckit.*
