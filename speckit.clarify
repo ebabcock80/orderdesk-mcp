@@ -1,0 +1,217 @@
+# Clarification Questions: OrderDesk MCP Server + WebUI
+
+**Version:** 1.0  
+**Status:** ANSWERED (Recommended Options Applied)  
+**Last Updated:** October 17, 2025  
+**Purpose:** De-risk ambiguity before planning by asking focused questions (filled with recommended answers)
+
+**Companion Documents:**
+- [`speckit.constitution`](./speckit.constitution)
+- [`speckit.specify`](./speckit.specify)
+- [`speckit.plan`](./speckit.plan)
+- [`speckit.tasks`](./speckit.tasks)
+
+---
+
+## Category 1: Transport & Protocol
+
+### Q1: MCP Transport Implementation Priority
+**Answer:** **Option C** — SSE in Phase 1 (for WebUI), WebSocket deferred to Phase 5.
+
+### Q2: MCP Tool Naming Convention
+**Answer:** **Option A** — Dot notation (e.g., `orders.list`, `orders.mutate_full`).
+
+---
+
+## Category 2: WebUI & Authentication
+
+### Q3: Public Signup Policy
+**Answer:** **Option B** — Start invite-only; consider enabling public signup later.
+
+### Q4: Email Provider Selection
+**Answer A:** **Option 3** — Multiple providers via adapter pattern.  
+**Answer B:** **Option 3** — Either user-provided or hosted from-address (hosted as fallback).
+
+### Q5: Email Verification Requirement
+**Answer:** **Option C** — Configurable per deployment (default: optional).
+
+### Q6: WebUI Technology Stack
+**Answer A:** **Option 3** — HTMX + server-rendered.  
+**Answer B:** **Option 2** — Tailwind CSS.
+
+### Q7: Master Key Display Policy
+**Answer:** **Option B** — Show prefix/last 8 chars after issuance; never full key again.
+
+### Q8: Master Key Rotation UX
+**Answer:** **Option B** — New key with 7-day grace period before old key auto-revokes.
+
+---
+
+## Category 3: Performance & Caching
+
+### Q9: Default Cache Backend
+**Answer:** **Option D** — In-memory by default; easy upgrade path to Redis.
+
+### Q10: Cache TTL Configuration
+**Answer:** **Option B** — Env-configurable TTLs with documented defaults.
+
+---
+
+## Category 4: Rate Limiting
+
+### Q11: Per-Tenant Rate Limits
+**Answer A:** **Option 2** — Differentiate Read vs Write.  
+**Answer B:** **Option 2** — Token bucket (allow bursts up to 2×).
+
+### Q12: OrderDesk API Rate Limit Strategy
+**Answer:** **Options C + D** — Auto-retry with exponential backoff and pre-emptive throttling (<80% of OD limit).
+
+---
+
+## Category 5: Concurrency & Mutations
+
+### Q13: Concurrency Conflict Handling
+**Answer A:** **Option 4** — Configurable (`MUTATION_MAX_RETRIES`), default **5**.  
+**Answer B:** **Option 3** — Exponential backoff **+ jitter**.
+
+### Q14: Optimistic Locking Enforcement
+**Answer:** **Option B** — Prefer E-Tags if available; fallback to `date_updated`.
+
+---
+
+## Category 6: Security & Privacy
+
+### Q15: PII Redaction Policy
+**Answer:** **Option B** — Redact email addresses in logs (e***@example.com). (Upgrade to D if GDPR is required.)
+
+### Q16: Audit Log Retention
+**Answer A:** **Option 2** — 90 days default.  
+**Answer B:** **Option 3** — WebUI admin purge/export tool.
+
+### Q17: Session Security
+**Answer A:** **Option 2** — Cookie + database session record (revocable).  
+**Answer B:** **Option 2** — Sliding timeout (e.g., 24h from last activity).
+
+---
+
+## Category 7: Multi-Tenancy & Collaboration
+
+### Q18: Multi-User Tenants
+**Answer:** **Option A** — Defer to v0.3.0+ (single-user per tenant initially).
+
+### Q19: Store Sharing Between Tenants
+**Answer:** **Option A** — No sharing initially (one store = one tenant).
+
+---
+
+## Category 8: Observability & Debugging
+
+### Q20: Log Verbosity Levels
+**Answer:** **Option A** — Standard levels only.
+
+### Q21: Trace Viewer Search Features
+**Answer (MVP v0.1.0 — Essential):**
+- [x] Filter by tenant  
+- [x] Filter by store  
+- [x] Filter by tool name  
+- [x] Filter by status (success/error)  
+- [x] Filter by date range  
+- [x] Full-text search in logs
+
+**Defer to v0.2.0 — Nice-to-have:**
+- [ ] Filter by correlation ID  
+- [ ] Filter by duration (slow requests)  
+- [ ] Export filtered results (JSON/CSV)  
+- [ ] Real-time updates (SSE)
+
+### Q22: Error Reporting
+**Answer (Include):**
+- **Essential:**
+  - [x] Error code
+  - [x] Human-readable message
+  - [x] Correlation ID
+  - [x] Timestamp
+- **Optional (include these):**
+  - [x] Suggested fixes
+  - [x] Example valid request
+  - [ ] Link to documentation
+  - [ ] Retry-After header (only when applicable)
+
+---
+
+## Category 9: API Test Console
+
+### Q23: API Console Parameter Handling
+**Answer:** **Option C** — Hybrid (forms for common endpoints + JSON editor for advanced).
+
+### Q24: API Console Response Display
+**Answer (Include):**
+- **Essential:**
+  - [x] Status code and message
+  - [x] Response body (formatted JSON)
+  - [x] Duration (ms)
+  - [x] Correlation ID
+- **Optional (include these):**
+  - [x] cURL command equivalent
+  - [x] Copy to clipboard buttons
+  - [x] Save as template
+  - [x] Syntax highlighting
+  - [ ] Request/response headers (redacted)
+  - [ ] Collapsible sections
+
+---
+
+## Category 10: Deployment & Operations
+
+### Q25: Docker Image Distribution
+**Answer:** **Option C** — Publish to both Docker Hub and GHCR.
+
+### Q26: Health Check Endpoints
+**Answer:** **Option D** — Basic, Detailed, Liveness, and Readiness endpoints.
+
+### Q27: Configuration Management
+**Answer:** **Option B** — Environment variables + optional YAML config file.
+
+---
+
+## Category 11: Testing & Quality
+
+### Q28: Test Coverage Requirements
+**Answer:** **Option C** — Fail CI if overall coverage < 80% (critical paths targeted higher).
+
+### Q29: Integration Test Strategy
+**Answer:** **Options A + D** — Real OD tests run locally only; CI uses mocked integrations.
+
+### Q30: E2E Test Tool for WebUI
+**Answer:** **Option A** — Playwright.
+
+---
+
+## Summary of Decisions
+**Critical (for Phase 1):** Q1=C, Q3=B, Q4=A3/B3, Q6=A3/B2, Q9=D, Q11=A2/B2, Q13=A4 (default 5)/B3  
+**Important:** Q5=C, Q7=B, Q8=B, Q10=B, Q12=C+D, Q15=B, Q16=A2/B3, Q17=A2/B2  
+**Deferred/Documented:** Q2=A, Q14=B, Q18=A, Q19=A, Q20=A, Q21 essentials checked, Q22 essentials+opt (fixes/examples), Q23=C, Q24 essentials + selected optional, Q25=C, Q26=D, Q27=B, Q28=C, Q29=A+D, Q30=A
+
+---
+
+## Decision Log
+| Question | Answer | Date | Rationale |
+|----------|--------|------|-----------|
+| Q1 | C | 2025-10-17 | Enables WebUI early; defers WS complexity |
+| Q3 | B | 2025-10-17 | Safer rollout; monitor abuse first |
+| Q4 | A=3, B=3 | 2025-10-17 | Flexibility + better deliverability/branding |
+| Q6 | A=3, B=2 | 2025-10-17 | Small JS footprint; fast styling |
+| Q9 | D | 2025-10-17 | Simple dev; easy prod upgrade |
+| Q11 | A=2, B=2 | 2025-10-17 | Protect writes; smooth bursts |
+| Q13 | A=4 (def 5), B=3 | 2025-10-17 | Reliable conflict handling |
+| Q16 | A=2, B=3 | 2025-10-17 | Reasonable retention + UI purge |
+| Q21 | Essentials checked | 2025-10-17 | MVP visibility & triage |
+| Q24 | Essentials + cURL/copy/save/highlight | 2025-10-17 | Dev-friendly debugging |
+| Q25 | C | 2025-10-17 | Max reach with GH integration |
+| Q26 | D | 2025-10-17 | Ops-friendly deployments |
+| Q28 | C | 2025-10-17 | Maintain quality bar |
+| Q29 | A + D | 2025-10-17 | Safety in CI; realism locally |
+
+---
+
+**END OF CLARIFICATION QUESTIONS (Recommended Answers Applied)**

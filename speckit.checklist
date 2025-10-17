@@ -1,0 +1,939 @@
+# Quality Checklists: OrderDesk MCP Server + WebUI
+
+**Version:** 1.0  
+**Status:** Active Validation Checklist  
+**Last Updated:** October 17, 2025  
+**Purpose:** Quality checklists to validate completeness, clarity, and consistency after planning
+
+**Companion Documents:**
+- [`speckit.constitution`](./speckit.constitution) - Design principles and constraints
+- [`speckit.specify`](./speckit.specify) - Technical specification
+- [`speckit.plan`](./speckit.plan) - Implementation plan
+- [`speckit.clarify`](./speckit.clarify) - Clarification questions
+
+---
+
+## How to Use This Document
+
+1. **Pre-Implementation:** Review all checklists before starting Phase 0
+2. **During Planning:** Verify specifications address all checklist items
+3. **Before Each Phase:** Confirm relevant checklist items are complete
+4. **Code Review:** Use as PR checklist for feature completeness
+5. **Release Gate:** All items must pass before production deployment
+
+**Status Indicators:**
+- ✅ Complete and verified
+- 🔄 In progress
+- ❌ Incomplete or failed
+- ⏭️ Deferred to later phase
+- N/A Not applicable for this deployment
+
+---
+
+## Part I: Specification Readiness Checklist
+
+### A. API Mapping & Tool Design
+
+#### MCP Tool Coverage
+- [ ] Every MCP tool maps 1:1 to a documented OrderDesk API endpoint
+- [ ] Tool names follow consistent convention (e.g., `resource.action`)
+- [ ] No invented endpoints or parameters beyond OrderDesk API docs
+- [ ] All documented OrderDesk parameters exposed (filters, sorts, pagination)
+- [ ] Undocumented or experimental OD features explicitly marked
+- [ ] Link to OrderDesk API docs in tool docstring
+
+**Validation Method:**
+```bash
+# Compare implemented tools against OrderDesk API catalog
+# https://apidocs.orderdesk.com/
+python scripts/validate_tool_coverage.py
+```
+
+#### JSON Schema Quality
+- [ ] Every tool has complete JSON Schema definition
+- [ ] `required` fields explicitly listed (no implicit requirements)
+- [ ] All parameters include `description` (helpful for LLMs)
+- [ ] Default values documented where applicable
+- [ ] Enum values match OrderDesk docs exactly
+- [ ] At least one example request per tool
+- [ ] Example responses documented (actual or representative)
+
+**Validation Method:**
+```bash
+# Validate all schemas are well-formed and complete
+python scripts/validate_schemas.py
+```
+
+#### Pagination & Filtering
+- [ ] All list endpoints expose `limit` parameter (with min/max validation)
+- [ ] All list endpoints expose `page` parameter (starting at 1)
+- [ ] `since` parameter exposed where OrderDesk supports it
+- [ ] `sort` parameter exposed where OrderDesk supports it
+- [ ] Search/filter parameters match OrderDesk docs exactly
+- [ ] Default pagination values documented explicitly
+- [ ] No silent truncation (LLM controls page size)
+
+**Validation Method:**
+```bash
+# Check all list endpoints have pagination params
+grep -r "list.*Params" mcp_server/routers/ | \
+  xargs grep -L "limit.*Field" && echo "FAIL" || echo "PASS"
+```
+
+---
+
+### B. Mutation Safety
+
+#### Full-Order Update Contract
+- [ ] Mutation flow documented: fetch → mutate → full-upload
+- [ ] No partial update (PATCH) operations implemented
+- [ ] `orders.mutate_full` uses full-object replacement
+- [ ] Convenience wrappers built on `mutate_full` (not direct updates)
+- [ ] Deep merge logic specified and tested
+- [ ] Typed operation enums defined (move_folder, add_items, etc.)
+
+**Validation Method:**
+```bash
+# Verify no PATCH operations exist
+grep -r "PATCH\|patch\|partial" mcp_server/routers/ && echo "FAIL: Partial updates found" || echo "PASS"
+```
+
+#### Concurrency Handling
+- [ ] Conflict detection mechanism specified (date_updated comparison)
+- [ ] Retry strategy documented (max attempts, backoff schedule)
+- [ ] Max retries configurable (`MUTATION_MAX_RETRIES` env var)
+- [ ] Exponential backoff with jitter implemented
+- [ ] Clear error message when max retries exceeded
+- [ ] Tests simulate concurrent mutations
+
+**Validation Method:**
+```bash
+# Run concurrency tests
+pytest tests/test_mutation_retry.py -v
+```
+
+#### Cache Invalidation
+- [ ] Write operations invalidate relevant cache keys
+- [ ] Invalidation pattern documented (exact key + wildcard)
+- [ ] Mutation operations invalidate order cache
+- [ ] Bulk operations invalidate list caches
+- [ ] Cache invalidation tested for all write paths
+
+**Validation Method:**
+```bash
+# Test cache invalidation
+pytest tests/test_cache_invalidation.py -v
+```
+
+---
+
+### C. Security Model
+
+#### Encryption & Key Management
+- [ ] HKDF key derivation specified (algorithm: SHA-256, salt source)
+- [ ] AES-256-GCM encryption for API keys at rest
+- [ ] Master key hashing uses strong algorithm (bcrypt or argon2)
+- [ ] Salt storage strategy defined (per-tenant, random)
+- [ ] Key rotation mechanism specified (for WebUI)
+- [ ] No plaintext secrets in database schema
+- [ ] Tenant key derivation tested (deterministic with same inputs)
+
+**Validation Method:**
+```bash
+# Test encryption roundtrip
+pytest tests/test_crypto.py -v
+
+# Verify no plaintext secrets in DB
+sqlite3 data/app.db ".schema" | grep -i "password\|secret\|key" | grep -v "hash\|ciphertext" && echo "FAIL" || echo "PASS"
+```
+
+#### Secret Redaction
+- [ ] Log redaction filter specified (fields: master_key, api_key, password, token, secret)
+- [ ] Additional PII redaction defined (per clarify doc Q15)
+- [ ] Redaction tested in all log outputs
+- [ ] Error messages never include secrets
+- [ ] Stack traces sanitized before logging
+- [ ] WebUI never displays full master keys or API keys
+
+**Validation Method:**
+```bash
+# Test log redaction
+pytest tests/test_security.py::test_log_redaction -v
+
+# Manual log inspection
+tail -f logs/app.log | grep -E "master_key|api_key" && echo "FAIL: Secret leaked" || echo "PASS"
+```
+
+#### Authentication & Authorization
+- [ ] Master key authentication flow documented
+- [ ] Session context lifecycle specified
+- [ ] Per-tenant isolation enforced (no cross-tenant data access)
+- [ ] Rate limiting per tenant documented (default: 120 RPM)
+- [ ] Rate limit configuration specified (`RATE_LIMIT_RPM` env var)
+- [ ] Auto-provision tenant toggle documented (`AUTO_PROVISION_TENANT`)
+
+**Validation Method:**
+```bash
+# Test tenant isolation
+pytest tests/test_tenant_isolation.py -v
+
+# Test rate limiting
+pytest tests/test_rate_limit.py -v
+```
+
+---
+
+### D. Session Context
+
+#### Context Management
+- [ ] Session context defined (tenant_id, tenant_key, active_store_id, correlation_id)
+- [ ] `tenant.use_master_key` establishes session
+- [ ] `stores.use_store` sets active store
+- [ ] Store lookup by name resolves to store_id + api_key
+- [ ] Context persists across tool calls in same session
+- [ ] Context isolation per MCP connection
+- [ ] Clear context on session end
+
+**Validation Method:**
+```bash
+# Test session context
+pytest tests/test_session.py -v
+```
+
+#### Store Name Resolution
+- [ ] Lookup by `store_name` when `store_id` omitted
+- [ ] Lookup prefers exact match over fuzzy
+- [ ] Ambiguous names return clear error with suggestions
+- [ ] Missing store name returns helpful error
+- [ ] Active store used when both store_name and store_id omitted
+- [ ] Resolution behavior documented in tool schemas
+
+**Validation Method:**
+```bash
+# Test store resolution
+pytest tests/test_store_resolution.py -v
+```
+
+---
+
+### E. Optional HTTP & WebUI
+
+#### Feature Flags
+- [ ] WebUI disabled by default (`ENABLE_WEBUI=false`)
+- [ ] Public signup disabled by default (`ENABLE_PUBLIC_SIGNUP=false`)
+- [ ] SSE transport optional and feature-flagged
+- [ ] WebSocket transport optional and feature-flagged
+- [ ] Server functions fully with all optional features disabled
+- [ ] Feature flag behavior documented in `.env.example`
+
+**Validation Method:**
+```bash
+# Test with all optional features disabled
+export ENABLE_WEBUI=false
+export ENABLE_PUBLIC_SIGNUP=false
+pytest tests/test_minimal_config.py -v
+```
+
+#### Configuration Defaults
+- [ ] All environment variables have safe defaults
+- [ ] Required variables validated at startup
+- [ ] Invalid configuration fails fast with helpful error
+- [ ] `.env.example` includes all variables with descriptions
+- [ ] WebUI environment variables grouped and commented
+- [ ] Email provider configuration documented
+
+**Validation Method:**
+```bash
+# Test with missing required config
+unset MCP_KMS_KEY
+python -m mcp_server.main 2>&1 | grep "MCP_KMS_KEY.*required" && echo "PASS" || echo "FAIL"
+```
+
+---
+
+### F. Testing Strategy
+
+#### Unit Test Coverage
+- [ ] Auth & cryptography tests (>90% coverage)
+- [ ] Session context tests (>90% coverage)
+- [ ] Store management tests (>85% coverage)
+- [ ] Pagination tests (all boundary cases)
+- [ ] Mutation engine tests (>90% coverage)
+- [ ] Cache service tests (>85% coverage)
+- [ ] Retry logic tests (all backoff scenarios)
+
+**Validation Method:**
+```bash
+# Check coverage
+pytest tests/unit/ --cov=mcp_server --cov-report=term-missing --cov-fail-under=80
+```
+
+#### Integration Tests
+- [ ] End-to-end MCP tool tests
+- [ ] OrderDesk API integration tests (env-gated)
+- [ ] Cache hit/miss integration tests
+- [ ] Mutation with real OrderDesk API (if credentials provided)
+- [ ] WebUI authentication flow tests
+- [ ] API Test Console execution tests
+
+**Validation Method:**
+```bash
+# Run integration tests (requires OrderDesk credentials)
+export ORDERDESK_TEST_ENABLED=true
+pytest tests/integration/ -v
+```
+
+#### E2E Tests (WebUI)
+- [ ] Signup flow (email → magic link → account creation)
+- [ ] Login flow (email → magic link → session)
+- [ ] Store management (register → list → edit → delete)
+- [ ] API console (select tool → fill params → execute → view response)
+- [ ] Trace viewer (filter → search → view details)
+- [ ] Master key rotation (generate → grace period → revoke)
+
+**Validation Method:**
+```bash
+# Run E2E tests with Playwright
+pytest tests/e2e/ --headed
+```
+
+---
+
+### G. CI/CD Pipeline
+
+#### Pipeline Definition
+- [ ] GitHub Actions workflow defined (`.github/workflows/ci.yml`)
+- [ ] Lint step: `ruff check .`
+- [ ] Format step: `black --check .`
+- [ ] Type check step: `mypy mcp_server/`
+- [ ] Unit test step: `pytest tests/unit/`
+- [ ] Integration test step: `pytest tests/integration/` (optional)
+- [ ] Docker build step: `docker build -t orderdesk-mcp-server .`
+- [ ] Coverage reporting step
+
+**Validation Method:**
+```bash
+# Run full CI locally
+./scripts/run_ci_locally.sh
+```
+
+#### Docker Build
+- [ ] Multi-stage Dockerfile (builder + runtime)
+- [ ] Non-root user in container
+- [ ] Health check command defined
+- [ ] Build reproducible (same inputs → same image)
+- [ ] Image size optimized (<500MB)
+- [ ] Secrets never baked into image
+- [ ] Volume mounts for persistent data
+
+**Validation Method:**
+```bash
+# Test Docker build
+docker build -t orderdesk-mcp-server:test .
+docker run --rm orderdesk-mcp-server:test python -c "import mcp_server; print('OK')"
+```
+
+---
+
+## Part II: WebUI-Specific Checklist
+
+### A. Authentication & Security
+
+#### Magic Link Authentication
+- [ ] Magic links expire in 15 minutes (configurable)
+- [ ] Tokens are cryptographically random (32+ bytes)
+- [ ] Tokens hashed before storage (SHA-256)
+- [ ] One-time use enforced (marked used after verification)
+- [ ] Rate limiting: 5 login attempts per IP per minute
+- [ ] Rate limiting: 2 signup attempts per IP per minute
+- [ ] Email templates professional and branded
+
+**Validation Method:**
+```bash
+# Test magic link expiry
+pytest tests/test_magic_link.py::test_expiry -v
+
+# Test rate limiting
+pytest tests/test_webui_rate_limit.py -v
+```
+
+#### Session Management
+- [ ] JWT tokens or secure session IDs
+- [ ] Sessions stored in database (revocable)
+- [ ] Session timeout: 24 hours (configurable)
+- [ ] Sliding timeout on activity
+- [ ] Logout clears session from database
+- [ ] Expired sessions cleaned up automatically
+
+**Validation Method:**
+```bash
+# Test session lifecycle
+pytest tests/test_webui_session.py -v
+```
+
+#### Cookie Security
+- [ ] `HttpOnly` flag set (prevents JavaScript access)
+- [ ] `Secure` flag set (HTTPS only, if behind HTTPS proxy)
+- [ ] `SameSite=Strict` (CSRF protection)
+- [ ] Cookie name configurable (`SESSION_COOKIE_NAME`)
+- [ ] No secrets in cookie value (only session ID)
+
+**Validation Method:**
+```bash
+# Manual cookie inspection
+curl -i http://localhost:8080/auth/login -c cookies.txt
+grep "HttpOnly.*Secure.*SameSite=Strict" cookies.txt && echo "PASS" || echo "FAIL"
+```
+
+#### CSRF Protection
+- [ ] Synchronizer token pattern implemented
+- [ ] CSRF token on all POST/PUT/DELETE forms
+- [ ] Token validated before processing request
+- [ ] Token regenerated after authentication
+- [ ] Token scoped to session (not global)
+- [ ] Clear error message on CSRF failure
+
+**Validation Method:**
+```bash
+# Test CSRF protection
+pytest tests/test_csrf.py -v
+```
+
+#### Content Security Policy
+- [ ] CSP header defined (blocks inline scripts by default)
+- [ ] Nonce-based script execution (if inline scripts needed)
+- [ ] No CDN dependencies (or allowlist specific CDNs)
+- [ ] HSTS header (if behind HTTPS proxy)
+- [ ] X-Frame-Options: DENY
+- [ ] X-Content-Type-Options: nosniff
+
+**Validation Method:**
+```bash
+# Check security headers
+curl -I http://localhost:8080/ | grep -E "Content-Security-Policy|X-Frame-Options|X-Content-Type-Options"
+```
+
+#### Secret Display Policy
+- [ ] Master keys displayed ONLY once during signup/generation
+- [ ] API keys NEVER displayed in UI (only stored encrypted)
+- [ ] Master key prefix shown for identification (first 8 chars)
+- [ ] Warning displayed: "Save this key, it cannot be retrieved"
+- [ ] No secrets in browser console or network tab
+- [ ] No secrets in HTML source or JavaScript
+
+**Validation Method:**
+```bash
+# Manual inspection
+# 1. Complete signup flow
+# 2. Inspect browser DevTools
+# 3. Verify no secrets in Network tab responses
+# 4. Verify no secrets in Console
+```
+
+---
+
+### B. API Test Console
+
+#### Console Features
+- [ ] Store selector dropdown (lists user's stores)
+- [ ] Tool/endpoint selector (groups by resource)
+- [ ] Dynamic parameter form OR hand-crafted forms (per clarify doc Q23)
+- [ ] All documented OrderDesk parameters exposed
+- [ ] Help text for each parameter (from tool schema description)
+- [ ] Required parameters marked with asterisk
+- [ ] Optional parameters collapsible or tabbed
+
+**Validation Method:**
+```bash
+# Manual testing
+# 1. Login to WebUI
+# 2. Navigate to /console
+# 3. Select "orders.list"
+# 4. Verify all params present: limit, page, since, sort, folder_id, status, search
+```
+
+#### Request Execution
+- [ ] "Execute" button sends request to OrderDesk API
+- [ ] Loading indicator during execution
+- [ ] Request intercepted and logged to audit_log
+- [ ] Correlation ID generated and displayed
+- [ ] Timeout after 30 seconds (configurable)
+- [ ] Error handling for network failures
+
+**Validation Method:**
+```bash
+# Test console execution
+pytest tests/test_api_console_execute.py -v
+```
+
+#### Response Display
+- [ ] Status code displayed (200, 400, 429, 500, etc.)
+- [ ] Status message displayed ("OK", "Bad Request", etc.)
+- [ ] Response body displayed (syntax-highlighted JSON)
+- [ ] Duration displayed (milliseconds)
+- [ ] Correlation ID displayed (linkable to trace viewer)
+- [ ] Request/response headers displayed (redacted)
+  - Redact: `ORDERDESK-API-KEY`, `Authorization`
+  - Show: `Content-Type`, `X-Tokens-Remaining`, `X-Retry-After`
+- [ ] Response expandable/collapsible for large payloads
+
+**Validation Method:**
+```bash
+# Manual testing
+# 1. Execute orders.list
+# 2. Verify response displays all required fields
+# 3. Verify API key NOT visible in headers
+# 4. Verify duration shown in milliseconds
+```
+
+#### Pagination Helpers
+- [ ] Quick-fill buttons for common limit values (10, 25, 50, 100)
+- [ ] "Next Page" / "Previous Page" buttons
+- [ ] Page indicator (Page X of Y, if total known)
+- [ ] "Since" timestamp helper (select from calendar OR "last hour", "last day")
+
+**Validation Method:**
+```bash
+# Manual testing
+# 1. Execute orders.list with limit=10
+# 2. Click "Next Page"
+# 3. Verify page=2 in request
+# 4. Verify results updated
+```
+
+#### Copy Functionality
+- [ ] "Copy as cURL" button (generates curl command)
+  - Includes headers (ORDERDESK-STORE-ID, ORDERDESK-API-KEY from user's store)
+  - Includes query params or request body
+  - Redacts API key with placeholder
+- [ ] "Copy as JSON" button (copies request params as JSON)
+- [ ] "Copy as MCP Tool Call" button (copies tool call format)
+- [ ] "Save as Template" button (saves request for later reuse)
+
+**Validation Method:**
+```bash
+# Manual testing
+# 1. Execute orders.list
+# 2. Click "Copy as cURL"
+# 3. Verify cURL command in clipboard
+# 4. Paste and run in terminal (with real API key)
+# 5. Verify same result
+```
+
+#### Template Management
+- [ ] List saved templates (dropdown or sidebar)
+- [ ] Load template into console
+- [ ] Edit template parameters
+- [ ] Delete template
+- [ ] Templates scoped to user (tenant_id)
+- [ ] Example templates provided (orders_list, orders_mutate, etc.)
+
+**Validation Method:**
+```bash
+# Test template CRUD
+pytest tests/test_console_templates.py -v
+```
+
+---
+
+### C. Trace Viewer
+
+#### Filtering
+- [ ] Filter by tenant (auto-applied, shows only current user's logs)
+- [ ] Filter by store (dropdown, multi-select)
+- [ ] Filter by tool name (dropdown or autocomplete)
+- [ ] Filter by status (success, error, both)
+- [ ] Filter by date range (start date, end date)
+- [ ] Filter by correlation ID (exact match)
+- [ ] Full-text search in parameters and error messages (optional per clarify doc Q21)
+
+**Validation Method:**
+```bash
+# Test trace filtering
+pytest tests/test_trace_viewer_filters.py -v
+```
+
+#### Display
+- [ ] Table view with columns:
+  - Timestamp (sortable)
+  - Tool name
+  - Store name
+  - Status (badge: green for success, red for error)
+  - Duration (ms)
+  - Correlation ID (clickable)
+- [ ] Row click opens detail view
+- [ ] Pagination controls (10/25/50 per page)
+- [ ] Export filtered results (JSON or CSV)
+
+**Validation Method:**
+```bash
+# Manual testing
+# 1. Navigate to /traces
+# 2. Verify table displays recent logs
+# 3. Click a row
+# 4. Verify detail modal opens
+```
+
+#### Detail View
+- [ ] Full request parameters (redacted secrets)
+- [ ] Full response (if available)
+- [ ] Error message (if error)
+- [ ] Stack trace (if error, sanitized)
+- [ ] Source (MCP or WebUI)
+- [ ] Client IP address (if WebUI)
+- [ ] User agent (if WebUI)
+- [ ] Timestamp (full ISO8601)
+
+**Validation Method:**
+```bash
+# Manual testing
+# 1. Click a trace row
+# 2. Verify all detail fields present
+# 3. Verify no secrets visible
+```
+
+#### Correlation
+- [ ] Click correlation ID navigates to trace detail
+- [ ] Related traces linked (if multiple calls in same operation)
+- [ ] Timeline view for related traces (optional)
+
+**Validation Method:**
+```bash
+# Manual testing
+# 1. Execute multi-step operation (e.g., mutation with retries)
+# 2. View traces
+# 3. Verify same correlation ID for all steps
+# 4. Click correlation ID
+# 5. Verify all related traces shown
+```
+
+---
+
+### D. Master Key Management (if Public Signup enabled)
+
+#### Signup Flow
+- [ ] Email address validated (format check)
+- [ ] Disposable email domains blocked (optional per clarify doc Q6.5)
+- [ ] Magic link sent to email
+- [ ] Link verification creates tenant
+- [ ] Master key generated (32+ bytes, base64-encoded)
+- [ ] Master key displayed ONCE with clear warning
+- [ ] User prompted to save key before proceeding
+- [ ] Key prefix stored for future identification
+
+**Validation Method:**
+```bash
+# E2E signup test
+pytest tests/e2e/test_signup_flow.py -v
+```
+
+#### Master Key Display
+- [ ] Full key shown ONLY during signup/generation
+- [ ] Warning: "This key will not be shown again"
+- [ ] "I have saved this key" checkbox before proceeding
+- [ ] Key masked with "Copy to Clipboard" button
+- [ ] Key prefix shown in settings (e.g., "abcd1234...")
+- [ ] Label editable (e.g., "Production Key", "Test Key")
+
+**Validation Method:**
+```bash
+# Manual testing
+# 1. Complete signup
+# 2. Verify key displayed
+# 3. Attempt to navigate back
+# 4. Verify key no longer visible
+# 5. Check settings page
+# 6. Verify only prefix shown
+```
+
+#### Key Rotation
+- [ ] "Generate New Key" button in settings
+- [ ] New key generated and displayed ONCE
+- [ ] Old key remains valid during grace period (7 days per clarify doc Q8)
+- [ ] Warning banner: "Old key expires in X days"
+- [ ] Manual revocation button for old key
+- [ ] Revoked keys rejected immediately
+- [ ] Revocation reason captured (optional text field)
+
+**Validation Method:**
+```bash
+# Test key rotation
+pytest tests/test_key_rotation.py -v
+```
+
+#### Key Listing
+- [ ] Settings page lists all master keys
+- [ ] Columns: Prefix, Label, Created, Last Used, Status
+- [ ] Status: Active, Expiring (grace period), Revoked
+- [ ] Sort by created date (newest first)
+- [ ] Edit label inline
+- [ ] Revoke button (with confirmation)
+
+**Validation Method:**
+```bash
+# Manual testing
+# 1. Navigate to /settings/keys
+# 2. Verify keys listed
+# 3. Click "Edit" on label
+# 4. Save new label
+# 5. Verify updated
+```
+
+---
+
+## Part III: Documentation Checklist
+
+### A. README.md
+
+#### Quickstart (MCP-only)
+- [ ] Installation instructions (Docker and pip)
+- [ ] Generate `MCP_KMS_KEY`: `openssl rand -base64 32`
+- [ ] Run server: `docker-compose up` OR `python -m mcp_server.main`
+- [ ] Test connection: echo tool call via stdin
+- [ ] First tool call example: `tenant.use_master_key`
+- [ ] Register store example: `stores.register`
+- [ ] Time to first success: <5 minutes
+
+**Validation Method:**
+```bash
+# Follow README quickstart on fresh environment
+time ./scripts/test_quickstart.sh
+# Should complete in <5 minutes
+```
+
+#### WebUI Quickstart (if enabled)
+- [ ] Enable WebUI: `ENABLE_WEBUI=true`
+- [ ] Configure SMTP (required environment variables)
+- [ ] Start server
+- [ ] Navigate to `http://localhost:8080/`
+- [ ] Enter email for magic link
+- [ ] Complete signup and save master key
+- [ ] Register first store
+- [ ] Time to first API call: <2 minutes
+
+**Validation Method:**
+```bash
+# Manual walkthrough
+# Time from server start to executing orders.list
+```
+
+#### Core Concepts
+- [ ] Master key tenancy explained
+- [ ] Store registration explained
+- [ ] Session context explained
+- [ ] Full-order mutations explained
+- [ ] Pagination control explained
+
+#### Troubleshooting
+- [ ] Common errors and solutions
+- [ ] Log locations
+- [ ] Debug mode instructions
+- [ ] Health check commands
+
+---
+
+### B. docs/endpoints.md (MCP Tools Reference)
+
+#### Tool Catalog
+- [ ] All tools listed and grouped by resource
+- [ ] Each tool entry includes:
+  - Tool name
+  - Description (what it does)
+  - Maps to OrderDesk endpoint (with link)
+  - Parameters table (name, type, required, default, description)
+  - Example request (JSON)
+  - Example response (JSON)
+  - Error cases and codes
+- [ ] Pagination parameters documented for all list endpoints
+- [ ] Session context behavior explained
+
+**Validation Method:**
+```bash
+# Generate tool catalog from code
+python scripts/generate_tool_docs.py > docs/endpoints_generated.md
+# Compare with hand-written docs
+diff docs/endpoints.md docs/endpoints_generated.md
+```
+
+---
+
+### C. docs/operations.md (Operations Guide)
+
+#### Full-Order Update Contract
+- [ ] Mutation flow explained (fetch → mutate → upload)
+- [ ] Deep merge semantics documented
+- [ ] Typed operations listed (move_folder, add_items, etc.)
+- [ ] When to use convenience wrappers vs mutate_full
+- [ ] Examples of safe mutations
+
+#### Retry & Concurrency
+- [ ] Conflict detection mechanism explained
+- [ ] Retry strategy documented (max attempts, backoff)
+- [ ] When retries occur vs when they fail fast
+- [ ] Error messages for max retries exceeded
+
+#### Caching
+- [ ] What's cached (orders, products, etc.)
+- [ ] TTLs per resource type
+- [ ] Invalidation strategy
+- [ ] Redis vs memory backend tradeoffs
+
+#### Rate Limiting
+- [ ] Per-tenant limits (default 120 RPM)
+- [ ] OrderDesk API limits (leaky bucket)
+- [ ] Handling 429 responses
+- [ ] Best practices for staying under limits
+
+---
+
+### D. Examples Directory
+
+#### MCP Tool Examples
+- [ ] `examples/tenant_use_master_key.json`
+- [ ] `examples/stores_register.json`
+- [ ] `examples/stores_list.json`
+- [ ] `examples/orders_list.json` (with pagination)
+- [ ] `examples/orders_list_paginated.json` (limit=25, page=2)
+- [ ] `examples/orders_get.json`
+- [ ] `examples/orders_create.json`
+- [ ] `examples/orders_mutate_full_mutation.json` (deep merge)
+- [ ] `examples/orders_mutate_full_ops.json` (typed operations)
+- [ ] `examples/orders_move_folder.json`
+- [ ] `examples/products_list.json`
+
+#### WebUI Console Examples
+- [ ] `examples/console/orders_list_paginated.json`
+- [ ] `examples/console/orders_mutate_full.json`
+- [ ] `examples/console/products_list.json`
+- [ ] `examples/console/shipments_create.json`
+
+#### Format
+- [ ] Each example includes:
+  - Description
+  - Request parameters
+  - Expected response (or sample)
+  - Notes on usage
+
+**Validation Method:**
+```bash
+# Test all examples are valid
+for file in examples/*.json; do
+  python scripts/validate_example.py $file || echo "FAIL: $file"
+done
+```
+
+---
+
+## Part IV: Pre-Release Validation
+
+### Phase 0 Completion
+- [ ] CI pipeline green (all checks pass)
+- [ ] Docker build succeeds
+- [ ] Container starts without errors
+- [ ] Health check returns 200 OK
+- [ ] Structured logs output valid JSON
+- [ ] No linter or type errors
+
+### Phase 1 Completion
+- [ ] All 6 tenant/store management tools functional
+- [ ] Master key authentication works
+- [ ] Store lookup by name works
+- [ ] Secrets encrypted at rest (verified in DB)
+- [ ] Secrets redacted in logs
+- [ ] Rate limiting enforced
+
+### Phase 2 Completion
+- [ ] orders.get and orders.list functional
+- [ ] All pagination parameters exposed
+- [ ] Caching works (cache hits verified in logs)
+- [ ] Retries on 429/5xx with backoff
+- [ ] Examples added for read operations
+
+### Phase 3 Completion
+- [ ] orders.mutate_full functional with concurrency retry
+- [ ] No partial update operations exist
+- [ ] Convenience wrappers work (move_folder, add_items, etc.)
+- [ ] Cache invalidated on writes
+- [ ] Integration test: create → mutate → delete
+
+### Phase 4 Completion
+- [ ] All documented OrderDesk endpoints mapped
+- [ ] Parameter completeness verified
+- [ ] Examples added for all resource types
+- [ ] Test coverage >75%
+
+### Phase 5 Completion (if WebUI enabled)
+- [ ] HTTP adapter functional
+- [ ] WebUI login flow works
+- [ ] Store management UI functional
+- [ ] API Test Console executes requests
+- [ ] Trace viewer shows filterable logs
+- [ ] CSRF protection working
+- [ ] Rate limiting enforced
+
+### Phase 6 Completion (if Public Signup enabled)
+- [ ] Signup flow works end-to-end
+- [ ] Master key displayed once
+- [ ] Key rotation works with grace period
+- [ ] Email verification works (if enabled)
+- [ ] Rate limiting enforced (2 signups/min per IP)
+
+### Phase 7 Completion
+- [ ] README quickstart works (<5 min to first success)
+- [ ] All documentation complete
+- [ ] All examples valid and tested
+- [ ] WebUI guide complete (if applicable)
+
+---
+
+## Part V: Production Readiness
+
+### Security Audit
+- [ ] No secrets in code, config, or logs
+- [ ] All encryption using battle-tested libraries
+- [ ] CSRF protection tested
+- [ ] Rate limiting tested
+- [ ] Session management secure
+- [ ] Input validation on all endpoints
+- [ ] SQL injection not possible (ORM prevents)
+- [ ] XSS not possible (template escaping enabled)
+
+### Performance Validation
+- [ ] p95 latency <500ms for cached reads
+- [ ] p95 latency <2s for writes
+- [ ] Cache hit rate >80%
+- [ ] Concurrent requests handled gracefully
+- [ ] Memory usage stable (no leaks)
+
+### Reliability Testing
+- [ ] Automatic retries working
+- [ ] Graceful degradation (Redis unavailable)
+- [ ] Health check accurate
+- [ ] Log rotation configured
+- [ ] Database backups documented
+
+### Monitoring
+- [ ] Structured logs parseable
+- [ ] Metrics endpoint functional (/metrics)
+- [ ] Alerting rules defined
+- [ ] Runbook for common issues
+
+---
+
+## Checklist Summary
+
+**Total Items:** ~300  
+**Categories:** 5 (Spec Readiness, WebUI, Docs, Pre-Release, Production)  
+**Critical (must pass):** ~100  
+**Recommended (should pass):** ~150  
+**Optional (nice to have):** ~50
+
+**Completion Thresholds:**
+- **Alpha Release:** >70% critical items
+- **Beta Release:** >90% critical + >70% recommended
+- **Production Release:** 100% critical + >90% recommended
+
+---
+
+**END OF CHECKLISTS**
+

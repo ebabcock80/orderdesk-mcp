@@ -1,7 +1,7 @@
 """Pydantic models for OrderDesk API objects."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -9,93 +9,93 @@ from pydantic import BaseModel, Field
 class Address(BaseModel):
     """Address model for shipping/billing addresses."""
 
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    company: Optional[str] = None
-    address1: Optional[str] = None
-    address2: Optional[str] = None
-    address3: Optional[str] = None
-    address4: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    postal_code: Optional[str] = None
-    country: Optional[str] = None
-    phone: Optional[str] = None
+    first_name: str | None = None
+    last_name: str | None = None
+    company: str | None = None
+    address1: str | None = None
+    address2: str | None = None
+    address3: str | None = None
+    address4: str | None = None
+    city: str | None = None
+    state: str | None = None
+    postal_code: str | None = None
+    country: str | None = None
+    phone: str | None = None
 
 
 class OrderItem(BaseModel):
     """Order item model."""
 
-    id: Optional[str] = None
-    name: Optional[str] = None
-    code: Optional[str] = None
-    price: Optional[float] = None
-    quantity: Optional[int] = None
-    weight: Optional[float] = None
-    metadata: Optional[Dict[str, Any]] = None
+    id: str | None = None
+    name: str | None = None
+    code: str | None = None
+    price: float | None = None
+    quantity: int | None = None
+    weight: float | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class Order(BaseModel):
     """Order model matching OrderDesk API structure."""
 
-    id: Optional[str] = None
-    email: Optional[str] = None
-    shipping_method: Optional[str] = None
-    quantity_total: Optional[int] = None
-    weight_total: Optional[float] = None
-    product_total: Optional[float] = None
-    shipping_total: Optional[float] = None
-    handling_total: Optional[float] = None
-    tax_total: Optional[float] = None
-    discount_total: Optional[float] = None
-    order_total: Optional[float] = None
-    cc_number_masked: Optional[str] = None
-    cc_exp: Optional[str] = None
-    processor_response: Optional[str] = None
-    payment_type: Optional[str] = None
-    payment_status: Optional[str] = None
-    processor_balance: Optional[float] = None
-    refund_total: Optional[float] = None
-    customer_id: Optional[str] = None
-    email_count: Optional[str] = None
-    ip_address: Optional[str] = None
-    tag_color: Optional[str] = None
-    source_name: Optional[str] = None
-    source_id: Optional[str] = None
-    fulfillment_name: Optional[str] = None
-    fulfillment_id: Optional[str] = None
-    tag_name: Optional[str] = None
-    folder_id: Optional[int] = None
-    date_added: Optional[datetime] = None
-    date_updated: Optional[datetime] = None
-    shipping: Optional[Address] = None
-    customer: Optional[Address] = None
-    return_address: Optional[Address] = None
-    items: Optional[List[OrderItem]] = None
-    notes: Optional[List[Dict[str, Any]]] = None
-    metadata: Optional[List[Dict[str, Any]]] = None
+    id: str | None = None
+    email: str | None = None
+    shipping_method: str | None = None
+    quantity_total: int | None = None
+    weight_total: float | None = None
+    product_total: float | None = None
+    shipping_total: float | None = None
+    handling_total: float | None = None
+    tax_total: float | None = None
+    discount_total: float | None = None
+    order_total: float | None = None
+    cc_number_masked: str | None = None
+    cc_exp: str | None = None
+    processor_response: str | None = None
+    payment_type: str | None = None
+    payment_status: str | None = None
+    processor_balance: float | None = None
+    refund_total: float | None = None
+    customer_id: str | None = None
+    email_count: str | None = None
+    ip_address: str | None = None
+    tag_color: str | None = None
+    source_name: str | None = None
+    source_id: str | None = None
+    fulfillment_name: str | None = None
+    fulfillment_id: str | None = None
+    tag_name: str | None = None
+    folder_id: int | None = None
+    date_added: datetime | None = None
+    date_updated: datetime | None = None
+    shipping: Address | None = None
+    customer: Address | None = None
+    return_address: Address | None = None
+    items: list[OrderItem] | None = None
+    notes: list[dict[str, Any]] | None = None
+    metadata: list[dict[str, Any]] | None = None
 
 
 class InventoryItem(BaseModel):
     """Inventory item model."""
 
-    id: Optional[str] = None
-    name: Optional[str] = None
-    code: Optional[str] = None
-    price: Optional[float] = None
-    stock: Optional[int] = None
-    weight: Optional[float] = None
-    variation_list: Optional[Dict[str, str]] = None
-    metadata: Optional[Dict[str, Any]] = None
-    manufacturer_sku: Optional[str] = None
-    date_added: Optional[datetime] = None
-    date_updated: Optional[datetime] = None
+    id: str | None = None
+    name: str | None = None
+    code: str | None = None
+    price: float | None = None
+    stock: int | None = None
+    weight: float | None = None
+    variation_list: dict[str, str] | None = None
+    metadata: dict[str, Any] | None = None
+    manufacturer_sku: str | None = None
+    date_added: datetime | None = None
+    date_updated: datetime | None = None
 
 
 class OrderMutation(BaseModel):
     """Order mutation request model."""
 
-    operations: List[Dict[str, Any]] = Field(
+    operations: list[dict[str, Any]] = Field(
         ..., description="List of mutation operations to apply"
     )
 
@@ -103,14 +103,14 @@ class OrderMutation(BaseModel):
 class MoveFolderRequest(BaseModel):
     """Move order to folder request."""
 
-    folder_id: Optional[int] = Field(None, description="Folder ID to move to")
-    folder_name: Optional[str] = Field(None, description="Folder name to move to")
+    folder_id: int | None = Field(None, description="Folder ID to move to")
+    folder_name: str | None = Field(None, description="Folder name to move to")
 
 
 class AddItemsRequest(BaseModel):
     """Add items to order request."""
 
-    items: List[OrderItem] = Field(..., description="Items to add to the order")
+    items: list[OrderItem] = Field(..., description="Items to add to the order")
 
 
 class UpdateAddressRequest(BaseModel):
@@ -124,7 +124,7 @@ class AddNoteRequest(BaseModel):
     """Add note to order request."""
 
     note: str = Field(..., description="Note text to add")
-    note_type: Optional[str] = Field("general", description="Type of note")
+    note_type: str | None = Field("general", description="Type of note")
 
 
 class StoreCreateRequest(BaseModel):
@@ -132,7 +132,7 @@ class StoreCreateRequest(BaseModel):
 
     store_id: str = Field(..., description="OrderDesk store ID")
     api_key: str = Field(..., description="OrderDesk API key")
-    label: Optional[str] = Field(None, description="Optional label for the store")
+    label: str | None = Field(None, description="Optional label for the store")
 
 
 class StoreResponse(BaseModel):
@@ -140,14 +140,14 @@ class StoreResponse(BaseModel):
 
     id: str
     store_id: str
-    label: Optional[str] = None
+    label: str | None = None
     created_at: datetime
 
 
 class ErrorResponse(BaseModel):
     """Error response model."""
 
-    error: Dict[str, Any] = Field(
+    error: dict[str, Any] = Field(
         ...,
         description="Error details including code, message, and request_id",
     )

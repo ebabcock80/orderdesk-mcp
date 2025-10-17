@@ -1,5 +1,5 @@
 # Multi-stage build for OrderDesk MCP Server
-FROM python:3.12-slim as builder
+FROM python:3.11-slim as builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -10,15 +10,15 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files, LICENSE, and README
+# Copy dependency files
 COPY pyproject.toml LICENSE README.md ./
 
-# Install Python dependencies
+# Install Python dependencies (including optional webui for full functionality)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e .
+    pip install --no-cache-dir -e .[webui]
 
 # Runtime stage
-FROM python:3.12-slim as runtime
+FROM python:3.11-slim as runtime
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -32,30 +32,33 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 WORKDIR /app
 
 # Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY mcp_server/ ./mcp_server/
-# Force rebuild by adding timestamp
-RUN echo "Build timestamp: $(date)" > /app/build_info.txt
 
 # Create data directory and set permissions
-RUN mkdir -p /data && chown -R appuser:appuser /data /app
+RUN mkdir -p /app/data && chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
 
-# Expose port (will be overridden by environment variable)
+# Expose port
 EXPOSE 8080
+
+# Volume for persistent data (SQLite database)
+VOLUME ["/app/data"]
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8080}/health || python -c "import sys; sys.exit(0)"
 
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV PORT=8080
+ENV DATABASE_URL=sqlite:///app/data/app.db
 
-# Entry point - supports both FastAPI and MCP server modes
-ENTRYPOINT ["sh", "-c", "if [ \"$SERVER_MODE\" = \"mcp\" ]; then python -m mcp_server.mcp_server; else uvicorn mcp_server.main:app --host 0.0.0.0 --port ${PORT:-8080}; fi"]
+# Default command: stdio MCP server
+# Override with: docker run ... uvicorn mcp_server.main:app --host 0.0.0.0 --port 8080
+CMD ["python", "-m", "mcp_server.main"]

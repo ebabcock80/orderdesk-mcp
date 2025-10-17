@@ -1,6 +1,5 @@
 """Authentication middleware for master key validation."""
 
-from typing import Optional
 
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -22,7 +21,7 @@ class AuthError(HTTPException):
 
 async def get_tenant_from_master_key(
     master_key: str, db: Session, auto_provision: bool = True
-) -> Optional[Tenant]:
+) -> Tenant | None:
     """Get or create tenant from master key."""
     # Try to find existing tenant
     crypto_manager = get_crypto_manager()
@@ -81,11 +80,11 @@ async def auth_middleware(request: Request, call_next):
     try:
         # Authenticate request
         tenant = await authenticate_request(request)
-        
+
         # Attach tenant to request state
         request.state.tenant = tenant
         request.state.tenant_id = tenant.id
-        
+
     except AuthError:
         # Let auth errors bubble up
         raise

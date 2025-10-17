@@ -1,7 +1,6 @@
 """Proxy header parsing and trust utilities."""
 
 import ipaddress
-from typing import Optional
 
 from fastapi import Request
 
@@ -26,7 +25,7 @@ def get_real_client_ip(request: Request) -> str:
             # X-Forwarded-For can contain multiple IPs, take the first one
             if header == "X-Forwarded-For":
                 value = value.split(",")[0].strip()
-            
+
             # Validate IP address
             try:
                 ipaddress.ip_address(value)
@@ -58,6 +57,6 @@ def should_add_hsts(request: Request) -> bool:
     return get_protocol(request) == "https"
 
 
-def get_cloudflare_ray(request: Request) -> Optional[str]:
+def get_cloudflare_ray(request: Request) -> str | None:
     """Get Cloudflare Ray ID if present."""
     return request.headers.get("CF-Ray")

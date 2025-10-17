@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
 try:
     from prometheus_client import Counter, Histogram, generate_latest
 except ImportError:
@@ -18,7 +19,7 @@ except ImportError:
             return self
         def inc(self):
             pass
-    
+
     class Histogram:
         def __init__(self, *args, **kwargs):
             pass
@@ -26,7 +27,7 @@ except ImportError:
             return self
         def observe(self, value):
             pass
-    
+
     def generate_latest():
         return b"# Prometheus metrics not available\n"
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -34,10 +35,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from mcp_server.auth.middleware import auth_middleware
 from mcp_server.config import settings
 from mcp_server.models.database import create_tables
-from mcp_server.routers import health, orders, products, stores, webhooks
+from mcp_server.routers import health, stores  # orders, products, webhooks - Phase 2+
 from mcp_server.utils.logging import logger
 from mcp_server.utils.proxy import get_cloudflare_ray, get_real_client_ip, should_add_hsts
-
 
 # Prometheus metrics
 REQUEST_COUNT = Counter(
@@ -57,13 +57,13 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     logger.info("application_startup", message="Starting OrderDesk MCP Server")
-    
+
     # Create database tables
     create_tables()
     logger.info("database_initialized", message="Database tables created")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("application_shutdown", message="Shutting down OrderDesk MCP Server")
 
@@ -87,22 +87,22 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # Generate request ID
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
         request.state.request_id = request_id
-        
+
         # Get real client IP
         client_ip = get_real_client_ip(request)
         request.state.client_ip = client_ip
-        
+
         # Get Cloudflare Ray ID
         cf_ray = get_cloudflare_ray(request)
-        
+
         start_time = time.time()
-        
+
         # Process request
         response = await call_next(request)
-        
+
         # Calculate duration
         duration_ms = int((time.time() - start_time) * 1000)
-        
+
         # Log request
         logger.info(
             "http_request",
@@ -115,19 +115,19 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             request_id=request_id,
             user_agent=request.headers.get("User-Agent"),
         )
-        
+
         # Update Prometheus metrics
         REQUEST_COUNT.labels(
             method=request.method,
             endpoint=request.url.path,
             status_code=response.status_code,
         ).inc()
-        
+
         REQUEST_DURATION.labels(
             method=request.method,
             endpoint=request.url.path,
         ).observe(time.time() - start_time)
-        
+
         return response
 
 
@@ -136,16 +136,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        
+
         # Add HSTS header if HTTPS
         if should_add_hsts(request):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        
+
         # Add other security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        
+
         return response
 
 
@@ -169,9 +169,10 @@ app.middleware("http")(auth_middleware)
 # Include routers
 app.include_router(health.router)
 app.include_router(stores.router)
-app.include_router(orders.router)
-app.include_router(products.router)
-app.include_router(webhooks.router)
+# Phase 2+ routers (not yet implemented):
+# app.include_router(orders.router)
+# app.include_router(products.router)
+# app.include_router(webhooks.router)
 
 
 @app.get("/metrics")
@@ -184,7 +185,7 @@ async def metrics():
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for consistent error responses."""
     request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
-    
+
     logger.error(
         "unhandled_exception",
         error=str(exc),
@@ -192,7 +193,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         path=request.url.path,
         method=request.method,
     )
-    
+
     return JSONResponse(
         status_code=500,
         content={
@@ -207,7 +208,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         "mcp_server.main:app",
         host="0.0.0.0",

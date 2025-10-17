@@ -1,0 +1,1246 @@
+# Technical Specification: Native MCP Server for OrderDesk
+
+**Version:** 1.1  
+**Status:** Active Specification  
+**Last Updated:** October 17, 2025  
+**Companion Document:** [`speckit.constitution`](./speckit.constitution)
+
+---
+
+## Title
+
+**Native MCP Server for OrderDesk + Optional WebUI (Docker, Multi-Tenant)**
+
+A production-ready Model Context Protocol (MCP) server providing secure, typed access to the OrderDesk API with multi-tenant isolation, comprehensive endpoint coverage, and safe mutation semantics. Includes an optional web-based admin interface for tenant onboarding, store management, and an API Test Console for validating OrderDesk calls outside AI agent flows.
+
+---
+
+## Problem Statement
+
+### Current State
+- AI agents need programmatic access to OrderDesk for order management automation
+- Multiple users/organizations require isolated access to their OrderDesk stores
+- OrderDesk API lacks typed interfaces and mutation safety guarantees
+- No standardized way for Claude/Cursor to interact with OrderDesk
+- Humans need an admin interface to onboard, manage stores, and test API calls without requiring an LLM
+
+### Challenges
+1. **Multi-tenancy:** Multiple users need secure, isolated access to their stores
+2. **Mutation Safety:** OrderDesk updates require full-object semantics; partial updates are unreliable
+3. **Credential Management:** API keys must be stored securely and never logged
+4. **LLM Control:** Agents need explicit control over pagination, filtering, and rate limiting
+5. **Session Context:** Reduce repetitive parameters by maintaining session state
+6. **Observability:** Need structured logging and tracing for debugging agent interactions
+7. **Human Accessibility:** Non-technical users need a way to onboard without CLI knowledge
+8. **API Validation:** Teams need to test OrderDesk API calls manually before automating with agents
+
+### Success Metrics
+- AI agents can safely execute OrderDesk operations with <5% error rate
+- Multi-tenant isolation with zero credential leakage
+- 100% coverage of documented OrderDesk endpoints
+- Sub-500ms p95 latency for cached reads
+- Clear error messages that help agents self-correct
+- WebUI users can onboard and register first store in <2 minutes (if WebUI enabled)
+- API Test Console supports all documented OrderDesk parameters
+- Trace viewer provides actionable debugging information
+
+---
+
+## Goals
+
+### Primary Goals (MUST HAVE)
+
+1. **Native MCP Implementation**
+   - stdio transport (REQUIRED for Claude/Cursor)
+   - Optional SSE/WebSocket transports for web clients
+   - Full MCP protocol compliance (tools, resources, prompts)
+
+2. **Multi-Tenant Security**
+   - Master Key authentication model
+   - One master key → many OrderDesk stores
+   - Encrypted credential storage (AES-256-GCM)
+   - Per-tenant rate limiting and audit logs
+
+3. **Complete API Coverage**
+   - All documented OrderDesk v2 endpoints
+   - Full parameter exposure (no hidden defaults)
+   - Explicit pagination controls (limit, page, since, sort)
+   - Typed schemas for all inputs/outputs
+
+4. **Safe Mutation Semantics**
+   - Enforce fetch → mutate → full-upload pattern
+   - Automatic retry on concurrency conflicts
+   - Cache invalidation on writes
+   - Idempotent operations where possible
+
+5. **Session Context Management**
+   - Remember active tenant (master key)
+   - Remember active store (store_name or store_id)
+   - Store lookup by name when store_id/api_key omitted
+   - Context scoped per MCP session
+
+6. **Developer Experience**
+   - Comprehensive documentation (setup, tools, operations)
+   - Docker deployment with docker-compose
+   - Example requests for every tool
+   - Clear validation errors with examples
+
+7. **Optional WebUI** (if enabled)
+   - Passwordless signup/login (magic link via email)
+   - Master Key issuance, rotation, and revocation
+   - Store management (CRUD operations)
+   - API Test Console with full schema exploration
+   - Trace viewer for debugging operations
+   - Audit log for security events
+
+### Secondary Goals (SHOULD HAVE)
+
+8. **Performance Optimization**
+   - Read-through cache for GET operations
+   - Configurable TTLs per resource type
+   - Redis backend support for distributed caching
+
+9. **Observability**
+   - Structured JSON logging
+   - Request correlation IDs
+   - Metrics export (Prometheus format)
+   - Health check endpoint
+
+10. **HTTP Transport (Optional)**
+    - Health checks (`GET /health`)
+    - Webhook ingestion endpoint
+    - Optional HTTP→MCP bridge for web clients
+
+---
+
+## Non-Goals
+
+**Explicitly OUT OF SCOPE:**
+
+### MCP/API Non-Goals:
+1. ❌ Building a generic REST gateway for human users
+2. ❌ Inventing undocumented OrderDesk endpoints or parameters
+3. ❌ Implementing partial update (PATCH) operations
+4. ❌ Supporting OrderDesk API v1 (legacy)
+5. ❌ Direct database access for tenants (all via MCP tools)
+6. ❌ Multi-region deployment or HA clustering (initial version)
+
+### WebUI Non-Goals:
+7. ❌ Full-featured OrderDesk dashboard (use OrderDesk's native UI)
+8. ❌ Real-time order management workflows (drag-drop, bulk actions)
+9. ❌ Analytics, reporting, or business intelligence features
+10. ❌ Multi-user collaboration (roles, permissions, teams)
+11. ❌ Native mobile apps (web interface only)
+12. ❌ OAuth2 or Social login (magic link only)
+13. ❌ Advanced fulfillment workflows (use OrderDesk or MCP tools)
+
+---
+
+## Stakeholders
+
+### Primary Stakeholders
+
+1. **Tenant Users**
+   - **Eric** (initial user, product owner)
+   - Future individual users and organizations
+   - **Needs:** Secure access, reliability, clear errors
+
+2. **LLM Agents**
+   - **Claude** (Anthropic)
+   - **Cursor AI** (VSCode extension)
+   - Other MCP-compatible agents
+   - **Needs:** Typed schemas, examples, explicit control, helpful errors
+
+3. **Operations Team**
+   - **Needs:** Monitoring, logs, health checks, deployment automation
+
+### Secondary Stakeholders
+
+4. **OrderDesk**
+   - API stability depends on proper rate limiting
+   - **Needs:** Respectful API usage, proper error handling
+
+5. **Open Source Community**
+   - Potential contributors and users
+   - **Needs:** Clear docs, contribution guidelines, license clarity
+
+---
+
+## System Overview / Architecture
+
+### High-Level Architecture
+
+```
+┌──────────────────────────┐         ┌────────────────────────────┐
+│     MCP Clients          │         │  Web Browsers (Optional)   │
+│  ┌────────┐ ┌─────────┐ │         │  ┌────────┐  ┌──────────┐ │
+│  │ Claude │ │ Cursor  │ │         │  │ Chrome │  │  Safari  │ │
+│  │Desktop │ │   AI    │ │         │  │        │  │          │ │
+│  └────┬───┘ └────┬────┘ │         │  └────┬───┘  └────┬─────┘ │
+│       │          │       │         │       │           │       │
+│       └──────────┴───────┼─────────┼───────┴───────────┘       │
+│          stdio/SSE/WS    │         │        HTTPS               │
+└──────────────────────────┘         └────────────────────────────┘
+                   │                              │
+                   └──────────────┬───────────────┘
+                                  │
+                                  v
+┌──────────────────────────────────────────────────────────────────────┐
+│                   OrderDesk MCP Server (Python)                      │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │              MCP Protocol Layer (stdio/SSE/WS)               │   │
+│  │  - Tool Discovery & Execution                                │   │
+│  │  - Resource Management                                       │   │
+│  │  - Session Context (tenant_id, store_id)                     │   │
+│  └────────────────────────┬─────────────────────────────────────┘   │
+│                           │                                          │
+│  ┌────────────────────────v─────────────────────────────────────┐   │
+│  │           Optional WebUI Layer (FastAPI/Flask)               │   │
+│  │  ┌────────────────┐  ┌────────────────┐  ┌──────────────┐  │   │
+│  │  │ Signup/Login   │  │ Store Mgmt UI  │  │ API Console  │  │   │
+│  │  │ (Magic Link)   │  │ (CRUD, Test)   │  │ (All Params) │  │   │
+│  │  └────────────────┘  └────────────────┘  └──────────────┘  │   │
+│  │  ┌────────────────┐  ┌────────────────┐                     │   │
+│  │  │ Trace Viewer   │  │  Audit Logs    │                     │   │
+│  │  │ (Filter/Search)│  │  (Security)    │                     │   │
+│  │  └────────────────┘  └────────────────┘                     │   │
+│  │  (CSRF protected, rate limited, responsive)                  │   │
+│  └────────────────────────┬─────────────────────────────────────┘   │
+│                           │                                          │
+│  ┌────────────────────────v─────────────────────────────────────┐   │
+│  │                   MCP Tools (Routers)                        │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │   │
+│  │  │   Tenant/    │  │    Orders    │  │   Products   │     │   │
+│  │  │    Stores    │  │    Tools     │  │    Tools     │     │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘     │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │   │
+│  │  │  Customers   │  │   Folders    │  │  Shipments   │     │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘     │   │
+│  └────────────────────────┬─────────────────────────────────────┘   │
+│                           │                                          │
+│  ┌────────────────────────v─────────────────────────────────────┐   │
+│  │                   Services Layer                             │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │   │
+│  │  │  OrderDesk   │  │    Tenant    │  │    Cache     │     │   │
+│  │  │    Client    │  │   Service    │  │   Service    │     │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘     │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │   │
+│  │  │    Crypto    │  │    Email     │  │    Audit     │     │   │
+│  │  │   Service    │  │   Service    │  │   Service    │     │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘     │   │
+│  └────────────────────────┬─────────────────────────────────────┘   │
+│                           │                                          │
+│  ┌────────────────────────v─────────────────────────────────────┐   │
+│  │                   Data Layer                                 │   │
+│  │  ┌──────────────────────────────────────────────────────┐   │   │
+│  │  │ SQLite DB (encrypted)                                │   │   │
+│  │  │  - tenants (master key hashes)                       │   │   │
+│  │  │  - stores (encrypted API keys)                       │   │   │
+│  │  │  - sessions (WebUI JWT sessions)                     │   │   │
+│  │  │  - audit_log (security events)                       │   │   │
+│  │  │  - magic_links (signup/login tokens)                 │   │   │
+│  │  └──────────────────────────────────────────────────────┘   │   │
+│  │  ┌──────────────┐                                           │   │
+│  │  │ Redis Cache  │ (optional: cache + session store)        │   │
+│  │  └──────────────┘                                           │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                        │
+└────────────────────────────────┬───────────────────────────────────┘
+                                 │
+                                 v
+                        ┌─────────────────────┐
+                        │   OrderDesk API     │
+                        │  app.orderdesk.me   │
+                        └─────────────────────┘
+```
+
+### Core Packages
+
+#### 1. **Transport Layer**
+- **Primary:** stdio (for Claude/Cursor)
+- **Optional:** SSE (Server-Sent Events) for web clients
+- **Optional:** WebSocket for real-time web clients
+- **HTTP Adapter:** Lightweight wrapper for health checks and webhooks
+
+#### 2. **MCP Protocol Implementation**
+- Tool registration and discovery
+- Parameter validation (JSON Schema)
+- Error handling and formatting
+- Session context management
+
+#### 3. **Tools (MCP Endpoints)**
+
+**Tenant & Store Management:**
+- `tenant.use_master_key(master_key)` - Authenticate tenant
+- `stores.register(store_id, api_key, store_name?, label?)` - Register new store
+- `stores.list()` - List all stores for tenant
+- `stores.delete(id)` - Remove store registration
+- `stores.use_store(store_id? | store_name?)` - Set active store for session
+- `stores.resolve(identifier)` - Resolve store name to ID + credentials
+
+**Orders:**
+- `orders.get(order_id)` - Fetch single order
+- `orders.list(filters?, pagination?)` - List orders with full control
+- `orders.create(order)` - Create new order
+- `orders.update_full(order_id, order)` - Replace entire order
+- `orders.mutate_full(order_id, mutation? | ops?)` - Fetch + mutate + upload
+- `orders.delete(order_id)` - Delete order
+- `orders.move_folder(order_id, folder_id)` - Move order to folder
+- `orders.add_items(order_id, items[])` - Add items to order
+- `orders.update_address(order_id, address_type, address)` - Update shipping/billing
+- `orders.create_history(order_id, message)` - Add history note
+
+**Order Items:**
+- `order_items.list(order_id)` - Get all items for order
+- `order_items.get(order_id, item_id)` - Get single item
+- `order_items.create(order_id, item)` - Add item to order
+- `order_items.update(order_id, item_id, item)` - Update item
+- `order_items.delete(order_id, item_id)` - Remove item
+
+**Shipments:**
+- `shipments.list(order_id)` - Get all shipments for order
+- `shipments.get(order_id, shipment_id)` - Get single shipment
+- `shipments.create(order_id, shipment)` - Add shipment
+- `shipments.update(order_id, shipment_id, shipment)` - Update shipment
+- `shipments.delete(order_id, shipment_id)` - Remove shipment
+- `shipments.batch_create(shipments[])` - Create multiple shipments
+
+**Products/Inventory:**
+- `products.list(filters?, pagination?)` - List inventory items
+- `products.get(id)` - Get single inventory item
+- `products.create(item)` - Create inventory item
+- `products.update(id, item)` - Update inventory item
+- `products.delete(id)` - Delete inventory item
+- `products.batch_update(items[])` - Update multiple items
+
+**Folders:**
+- `folders.list()` - Get folder structure from store settings
+
+**Store Settings:**
+- `store.get_settings()` - Get store configuration and folders
+
+**Webhooks (HTTP only):**
+- `webhooks.receive(payload)` - Process incoming webhook
+
+#### 4. **Services**
+
+**OrderDeskClient:**
+- HTTP client wrapper (httpx async)
+- Automatic retries on 429/5xx (exponential backoff + jitter)
+- Rate limit header parsing (`X-Tokens-Remaining`, `X-Retry-After`)
+- Request/response logging
+- Error normalization
+
+**TenantService:**
+- Master key validation (bcrypt/argon2 hash check)
+- Store lookup by name or ID
+- Credential decryption
+- Session context management (MCP)
+
+**CryptoService:**
+- Key derivation: `HKDF-SHA256(MCP_KMS_KEY, master_key_hash)`
+- Encryption: AES-256-GCM
+- Decryption with tag verification
+- Secret redaction for logs
+- Master key generation (for public signup)
+
+**CacheService:**
+- Backends: memory (default), redis (optional)
+- Read-through cache for GETs
+- TTL configuration per resource type
+- Invalidation on writes
+- Cache key structure: `{tenant_id}:{store_id}:{resource}:{id}`
+
+**LoggingService:**
+- Structured JSON logs
+- Correlation ID generation (UUID4)
+- Context injection (tenant_id, store_id, tool_name)
+- Secret redaction filters
+
+**EmailService (WebUI only):**
+- Magic link generation and delivery
+- Email verification (optional)
+- SMTP or transactional email provider (SendGrid, Mailgun, etc.)
+- Email templates (signup, login, password reset)
+- Rate limiting per recipient
+
+**SessionService (WebUI only):**
+- JWT token generation and validation
+- Secure cookie management (HttpOnly, Secure, SameSite)
+- Session storage (SQLite or Redis)
+- Session expiry and cleanup
+- CSRF token generation and validation
+
+**AuditService (WebUI only):**
+- Log all admin actions (signup, login, store registration, credential tests)
+- Query audit logs by tenant, action type, date range
+- Retention policy (configurable, default 90 days)
+- Export audit logs (JSON, CSV)
+
+#### 5. **Storage (SQLite + optional Redis)**
+
+**Primary Database:** SQLite (encrypted at rest via SQLCipher or application-level encryption)
+
+**Cache Backend:** Redis (optional, for distributed deployments)
+
+### Resilience & Reliability
+
+**HTTP Client Configuration (httpx):**
+```python
+httpx.AsyncClient(
+    timeout=httpx.Timeout(30.0, connect=5.0),
+    limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+    transport=httpx.AsyncHTTPTransport(retries=3)
+)
+```
+
+**Retry Strategy:**
+- **429 (Rate Limit):** Respect `X-Retry-After` header, exponential backoff (1s, 2s, 4s)
+- **5xx (Server Error):** Exponential backoff with jitter (1s + rand(0-1s), 2s + rand(0-2s), 4s + rand(0-4s))
+- **Network Errors:** Same as 5xx
+- **Max Retries:** 3 attempts (configurable)
+- **Timeout:** 30s per request
+
+**Concurrency Handling (for mutations):**
+- On conflict (order changed since fetch): refetch + retry
+- Max retry attempts: 5 (configurable)
+- Backoff: 500ms, 1s, 2s, 4s, 8s
+
+**Caching Strategy:**
+- **Orders:** 15s TTL (short due to frequent updates)
+- **Products:** 60s TTL
+- **Customers:** 60s TTL
+- **Store Settings:** 300s TTL (rarely changes)
+- **Invalidation:** On write operations (create, update, delete, mutate)
+
+---
+
+## Key Interfaces (MCP Tools)
+
+All tools use typed JSON Schemas with explicit `required` fields and examples.
+
+### Session Management Tools
+
+#### `tenant.use_master_key`
+```json
+{
+  "name": "tenant.use_master_key",
+  "description": "Authenticate as a tenant using your master key. This establishes a session for subsequent tool calls.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "master_key": {
+        "type": "string",
+        "description": "Your master key (min 16 chars). Keep this secret!"
+      }
+    },
+    "required": ["master_key"]
+  }
+}
+```
+
+**Returns:**
+```json
+{
+  "status": "success",
+  "tenant_id": "uuid",
+  "stores_count": 3,
+  "message": "Authenticated successfully"
+}
+```
+
+#### `stores.register`
+```json
+{
+  "name": "stores.register",
+  "description": "Register an OrderDesk store with your tenant account. Get store_id and api_key from OrderDesk Settings > API.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "store_id": {
+        "type": "string",
+        "description": "OrderDesk store ID"
+      },
+      "api_key": {
+        "type": "string",
+        "description": "OrderDesk API key"
+      },
+      "store_name": {
+        "type": "string",
+        "description": "Friendly name for this store (unique per tenant). Defaults to store_id."
+      },
+      "label": {
+        "type": "string",
+        "description": "Optional label for organization (e.g., 'Production', 'Staging')"
+      }
+    },
+    "required": ["store_id", "api_key"]
+  }
+}
+```
+
+#### `stores.use_store`
+```json
+{
+  "name": "stores.use_store",
+  "description": "Set the active store for this session. Subsequent tool calls will use this store unless overridden.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "identifier": {
+        "type": "string",
+        "description": "Store ID or store name"
+      }
+    },
+    "required": ["identifier"]
+  }
+}
+```
+
+### Order Management Tools
+
+#### `orders.list`
+```json
+{
+  "name": "orders.list",
+  "description": "List orders from OrderDesk with full filtering and pagination control. Maps to: GET /api/v2/orders. Docs: https://apidocs.orderdesk.com/#get-multiple-orders",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "store_name": {
+        "type": "string",
+        "description": "Store name (optional if active store is set)"
+      },
+      "folder_id": {
+        "type": "string",
+        "description": "Filter by folder ID. Get folder IDs via store.get_settings()"
+      },
+      "status": {
+        "type": "string",
+        "description": "Filter by order status"
+      },
+      "since": {
+        "type": "string",
+        "format": "date-time",
+        "description": "ISO8601 datetime. Return orders updated since this time."
+      },
+      "sort": {
+        "type": "string",
+        "enum": ["date_added", "date_updated"],
+        "description": "Sort field"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 250,
+        "default": 50,
+        "description": "Max records per page (1-250)"
+      },
+      "page": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 1,
+        "description": "Page number starting at 1"
+      },
+      "search": {
+        "type": "string",
+        "description": "Free text search query"
+      }
+    },
+    "required": []
+  },
+  "examples": [
+    {
+      "store_name": "my-store",
+      "folder_id": "21654",
+      "limit": 100,
+      "page": 1
+    }
+  ]
+}
+```
+
+#### `orders.mutate_full`
+```json
+{
+  "name": "orders.mutate_full",
+  "description": "Safely mutate an order using fetch-mutate-upload pattern. Automatically retries on concurrency conflicts. Use this instead of orders.update_full for safety.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "store_name": {
+        "type": "string",
+        "description": "Store name (optional if active store is set)"
+      },
+      "order_id": {
+        "type": "string",
+        "description": "OrderDesk order ID"
+      },
+      "mutation": {
+        "type": "object",
+        "description": "Object to deep-merge into fetched order. Use this OR ops, not both."
+      },
+      "ops": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "enum": ["move_folder", "add_items", "remove_items", "update_address", "set_status"]
+            }
+          },
+          "required": ["op"]
+        },
+        "description": "Array of typed operations to apply. Use this OR mutation, not both."
+      }
+    },
+    "required": ["order_id"]
+  },
+  "examples": [
+    {
+      "order_id": "26211",
+      "mutation": {
+        "email": "newemail@example.com",
+        "shipping": {
+          "address1": "123 New St"
+        }
+      }
+    }
+  ]
+}
+```
+
+#### `orders.move_folder` (convenience wrapper)
+```json
+{
+  "name": "orders.move_folder",
+  "description": "Move order(s) to a different folder. Convenience wrapper around orders.mutate_full. Maps to: POST /api/v2/move-orders",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "store_name": {
+        "type": "string",
+        "description": "Store name (optional if active store is set)"
+      },
+      "order_ids": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Array of order IDs to move"
+      },
+      "destination_folder_id": {
+        "type": "string",
+        "description": "Target folder ID. Use this OR destination_folder_name."
+      },
+      "destination_folder_name": {
+        "type": "string",
+        "description": "Target folder name (must match exactly). Use this OR destination_folder_id."
+      }
+    },
+    "required": ["order_ids"]
+  }
+}
+```
+
+### Product/Inventory Tools
+
+#### `products.list`
+```json
+{
+  "name": "products.list",
+  "description": "List inventory items with full pagination. Maps to: GET /api/v2/inventory-items",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "store_name": {
+        "type": "string",
+        "description": "Store name (optional if active store is set)"
+      },
+      "code": {
+        "type": "string",
+        "description": "Filter by product code (SKU)"
+      },
+      "search": {
+        "type": "string",
+        "description": "Search in name, code, or metadata"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 250,
+        "default": 50
+      },
+      "page": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 1
+      }
+    },
+    "required": []
+  }
+}
+```
+
+---
+
+## Data Model
+
+### Database: SQLite (encrypted fields)
+
+#### Table: `tenants`
+```sql
+CREATE TABLE tenants (
+    id TEXT PRIMARY KEY,              -- UUID
+    master_key_hash TEXT NOT NULL,    -- bcrypt/argon2 hash
+    salt TEXT NOT NULL,                -- Random salt for HKDF
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_tenants_master_key_hash ON tenants(master_key_hash);
+```
+
+#### Table: `stores`
+```sql
+CREATE TABLE stores (
+    id TEXT PRIMARY KEY,              -- UUID
+    tenant_id TEXT NOT NULL,          -- FK to tenants.id
+    store_id TEXT NOT NULL,           -- OrderDesk store ID
+    store_name TEXT NOT NULL,         -- Friendly name (unique per tenant)
+    label TEXT,                        -- Optional label
+    api_key_ciphertext TEXT NOT NULL, -- AES-256-GCM encrypted
+    api_key_tag TEXT NOT NULL,        -- GCM authentication tag
+    api_key_nonce TEXT NOT NULL,      -- GCM nonce/IV
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    UNIQUE(tenant_id, store_name),
+    UNIQUE(tenant_id, store_id)
+);
+
+CREATE INDEX idx_stores_tenant_id ON stores(tenant_id);
+CREATE INDEX idx_stores_store_name ON stores(tenant_id, store_name);
+```
+
+#### Table: `audit_log` (optional)
+```sql
+CREATE TABLE audit_log (
+    id TEXT PRIMARY KEY,              -- UUID
+    tenant_id TEXT NOT NULL,
+    store_id TEXT,
+    tool_name TEXT NOT NULL,
+    parameters TEXT,                   -- JSON (secrets redacted)
+    status TEXT NOT NULL,              -- success/error
+    error_message TEXT,
+    duration_ms INTEGER,
+    request_id TEXT NOT NULL,
+    source TEXT NOT NULL,              -- 'mcp' or 'webui'
+    ip_address TEXT,                   -- Client IP (WebUI only)
+    user_agent TEXT,                   -- Browser UA (WebUI only)
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_audit_log_tenant_id ON audit_log(tenant_id);
+CREATE INDEX idx_audit_log_created_at ON audit_log(created_at);
+CREATE INDEX idx_audit_log_request_id ON audit_log(request_id);
+CREATE INDEX idx_audit_log_source ON audit_log(source);
+```
+
+#### Table: `sessions` (WebUI only)
+```sql
+CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,              -- UUID
+    tenant_id TEXT NOT NULL,
+    session_token TEXT NOT NULL,      -- JWT token or session ID
+    ip_address TEXT,
+    user_agent TEXT,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_activity_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    UNIQUE(session_token)
+);
+
+CREATE INDEX idx_sessions_tenant_id ON sessions(tenant_id);
+CREATE INDEX idx_sessions_token ON sessions(session_token);
+CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
+```
+
+#### Table: `magic_links` (WebUI only)
+```sql
+CREATE TABLE magic_links (
+    id TEXT PRIMARY KEY,              -- UUID
+    email TEXT NOT NULL,
+    token TEXT NOT NULL,              -- Secure random token (32+ bytes)
+    token_hash TEXT NOT NULL,         -- SHA-256 hash of token
+    purpose TEXT NOT NULL,            -- 'signup' or 'login'
+    tenant_id TEXT,                   -- NULL for signup, populated for login
+    ip_address TEXT,
+    used BOOLEAN NOT NULL DEFAULT 0,
+    used_at TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    UNIQUE(token_hash)
+);
+
+CREATE INDEX idx_magic_links_email ON magic_links(email);
+CREATE INDEX idx_magic_links_token_hash ON magic_links(token_hash);
+CREATE INDEX idx_magic_links_expires_at ON magic_links(expires_at);
+CREATE INDEX idx_magic_links_purpose ON magic_links(purpose);
+```
+
+#### Table: `master_key_metadata` (WebUI only, optional)
+```sql
+CREATE TABLE master_key_metadata (
+    id TEXT PRIMARY KEY,              -- UUID
+    tenant_id TEXT NOT NULL,
+    master_key_prefix TEXT NOT NULL,  -- First 8 chars for identification
+    label TEXT,                        -- User-provided label (e.g., "Production Key")
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP,
+    revoked BOOLEAN NOT NULL DEFAULT 0,
+    revoked_at TIMESTAMP,
+    revoked_reason TEXT,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_master_key_metadata_tenant_id ON master_key_metadata(tenant_id);
+CREATE INDEX idx_master_key_metadata_revoked ON master_key_metadata(revoked);
+```
+
+### Cache Keys (Redis/Memory)
+
+**Format:** `{tenant_id}:{store_id}:{resource_type}:{resource_id}`
+
+**Examples:**
+- `abc-123:store-456:order:26211`
+- `abc-123:store-456:product:inv-789`
+- `abc-123:store-456:store_settings:*`
+
+**Invalidation Patterns:**
+- Order updated: invalidate `*:order:{order_id}` and `*:orders:list:*`
+- Product updated: invalidate `*:product:{product_id}` and `*:products:list:*`
+
+---
+
+## Security
+
+### Environment Variables
+
+**Required:**
+```bash
+MCP_KMS_KEY="base64-encoded-32-byte-key"  # Master encryption key
+```
+
+**Optional - Core:**
+```bash
+# Server
+PORT=8080
+DATABASE_URL="sqlite:///data/app.db"
+LOG_LEVEL="INFO"
+
+# Security
+TRUST_PROXY="false"                    # Enable proxy header parsing
+RATE_LIMIT_RPM=120                     # Requests per minute per tenant
+AUTO_PROVISION_TENANT="false"          # Auto-create tenant on first use
+WEBHOOK_SECRET="shared-secret"         # For webhook signature validation
+
+# Cache
+CACHE_BACKEND="memory"                 # memory|redis
+REDIS_URL="redis://localhost:6379/0"
+CACHE_TTL_ORDERS=15
+CACHE_TTL_PRODUCTS=60
+CACHE_TTL_CUSTOMERS=60
+
+# Resilience
+HTTP_TIMEOUT=30
+HTTP_MAX_RETRIES=3
+MUTATION_MAX_RETRIES=5
+```
+
+**Optional - WebUI:**
+```bash
+# WebUI Feature Toggle
+ENABLE_WEBUI="false"                   # Enable optional web interface
+ENABLE_PUBLIC_SIGNUP="false"           # Allow public user registration
+
+# WebUI Authentication
+JWT_SECRET_KEY="your-secret-key-here"  # Required if ENABLE_WEBUI=true
+SESSION_TIMEOUT=86400                  # Session timeout in seconds (24 hours)
+MAGIC_LINK_EXPIRY=900                  # Magic link expiry in seconds (15 minutes)
+
+# Email Configuration (for magic links)
+REQUIRE_EMAIL_VERIFICATION="false"     # Require email verification on signup
+SMTP_HOST="smtp.example.com"           # SMTP server (required if WebUI enabled)
+SMTP_PORT=587                          # SMTP port
+SMTP_USER="noreply@example.com"        # SMTP username
+SMTP_PASSWORD="smtp-password"          # SMTP password
+SMTP_FROM="OrderDesk MCP <noreply@example.com>"  # From email address
+SMTP_TLS="true"                        # Use TLS
+
+# WebUI Rate Limiting
+WEBUI_RATE_LIMIT_LOGIN=5               # Login attempts per IP per minute
+WEBUI_RATE_LIMIT_SIGNUP=2              # Signup attempts per IP per minute
+WEBUI_RATE_LIMIT_API_CONSOLE=30        # API console requests per user per minute
+
+# WebUI Security
+CSRF_SECRET_KEY="your-csrf-secret"     # CSRF token secret (auto-generated if omitted)
+SESSION_COOKIE_NAME="orderdesk_session"
+SESSION_COOKIE_SECURE="true"           # Require HTTPS for cookies
+SESSION_COOKIE_HTTPONLY="true"
+SESSION_COOKIE_SAMESITE="Strict"       # Strict, Lax, or None
+
+# WebUI Features
+ENABLE_TRACE_VIEWER="true"             # Enable trace/logs viewer in UI
+ENABLE_AUDIT_LOG="true"                # Enable audit logging
+AUDIT_LOG_RETENTION_DAYS=90            # Audit log retention period
+```
+
+### Encryption Details
+
+**Key Derivation (HKDF-SHA256):**
+```python
+def derive_tenant_key(master_key: str, salt: str) -> bytes:
+    """
+    Derive per-tenant encryption key from master key.
+    
+    Args:
+        master_key: Tenant's master key (plaintext, in memory only)
+        salt: Random salt stored in database
+    
+    Returns:
+        32-byte AES key
+    """
+    kms_key = base64.b64decode(os.environ["MCP_KMS_KEY"])
+    info = f"orderdesk-mcp-tenant-{salt}".encode()
+    
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt.encode(),
+        info=info,
+        backend=default_backend()
+    )
+    
+    return hkdf.derive(master_key.encode())
+```
+
+**Encryption (AES-256-GCM):**
+```python
+def encrypt_api_key(api_key: str, tenant_key: bytes) -> tuple[str, str, str]:
+    """
+    Encrypt API key using AES-256-GCM.
+    
+    Returns:
+        (ciphertext_b64, tag_b64, nonce_b64)
+    """
+    nonce = os.urandom(12)
+    cipher = Cipher(
+        algorithms.AES(tenant_key),
+        modes.GCM(nonce),
+        backend=default_backend()
+    )
+    encryptor = cipher.encryptor()
+    
+    ciphertext = encryptor.update(api_key.encode()) + encryptor.finalize()
+    
+    return (
+        base64.b64encode(ciphertext).decode(),
+        base64.b64encode(encryptor.tag).decode(),
+        base64.b64encode(nonce).decode()
+    )
+```
+
+### Secret Redaction
+
+**Log Filter:**
+```python
+REDACTED_FIELDS = {
+    "master_key", "api_key", "api_key_ciphertext", 
+    "password", "token", "secret", "authorization"
+}
+
+def redact_secrets(data: dict) -> dict:
+    """Recursively redact sensitive fields in log data"""
+    if isinstance(data, dict):
+        return {
+            k: "[REDACTED]" if k.lower() in REDACTED_FIELDS else redact_secrets(v)
+            for k, v in data.items()
+        }
+    elif isinstance(data, list):
+        return [redact_secrets(item) for item in data]
+    return data
+```
+
+### Rate Limiting
+
+**Per-Tenant Rate Limit:**
+- Default: 120 requests per minute (2 req/sec average)
+- Sliding window algorithm
+- Configurable via `RATE_LIMIT_RPM` env var
+
+**OrderDesk API Rate Limit Handling:**
+- Parse `X-Tokens-Remaining` header
+- If `X-Retry-After` > 0, wait before next request
+- Log rate limit events with tenant_id and store_id
+
+---
+
+## Testing
+
+### Unit Tests (Required)
+
+**Location:** `tests/unit/`
+
+**Coverage:**
+1. **Authentication (`test_auth.py`)**
+   - Master key hashing and validation
+   - Tenant key derivation (HKDF)
+   - API key encryption/decryption
+   - Session context management
+
+2. **Store Management (`test_stores.py`)**
+   - Store registration and lookup
+   - Lookup by store_name vs store_id
+   - Store deletion and cascade
+   - Duplicate name/ID prevention
+
+3. **Mutations (`test_mutations.py`)**
+   - Fetch → mutate → upload flow
+   - Deep merge logic
+   - Concurrency retry with backoff
+   - Cache invalidation
+
+4. **Pagination (`test_pagination.py`)**
+   - Parameter validation (limit, page)
+   - Default values
+   - Out-of-bounds handling
+
+5. **Validation (`test_validation.py`)**
+   - Missing required fields
+   - Invalid enum values
+   - Type coercion and errors
+   - Helpful error messages
+
+6. **Proxy Headers (`test_proxy.py`, conditional)**
+   - X-Forwarded-For parsing
+   - CF-Connecting-IP extraction
+   - TRUST_PROXY flag behavior
+
+### Integration Tests (Optional, env-gated)
+
+**Location:** `tests/integration/`
+
+**Requirements:**
+```bash
+ORDERDESK_TEST_ENABLED=true
+ORDERDESK_TEST_STORE_ID=your-test-store-id
+ORDERDESK_TEST_API_KEY=your-test-api-key
+```
+
+**Coverage:**
+1. **Orders (`test_orders_integration.py`)**
+   - `orders.list` with pagination
+   - `orders.get` single order
+   - `orders.create` → `orders.mutate_full` → `orders.delete`
+   - Move order between folders
+
+2. **Products (`test_products_integration.py`)**
+   - `products.list` with filters
+   - `products.create` → `products.update` → `products.delete`
+
+3. **Cache (`test_cache_integration.py`)**
+   - Cache hit/miss for reads
+   - Cache invalidation on writes
+
+**Cleanup:** Each test must clean up created resources (delete test orders, products, etc.)
+
+### Test Fixtures
+
+**Location:** `tests/conftest.py`
+
+```python
+@pytest.fixture
+def master_key():
+    """Generate test master key"""
+    return secrets.token_urlsafe(32)
+
+@pytest.fixture
+def test_tenant(master_key):
+    """Create test tenant in database"""
+    tenant_id = str(uuid.uuid4())
+    # ... create tenant with master_key
+    yield tenant_id
+    # ... cleanup
+
+@pytest.fixture
+def test_store(test_tenant):
+    """Register test store"""
+    # ... register store with test credentials
+    yield store_id
+    # ... cleanup
+```
+
+---
+
+## Accept/Success Criteria
+
+### Functional Requirements ✅
+
+1. **MCP Protocol Compliance**
+   - [ ] stdio transport functional with Claude/Cursor
+   - [ ] Tools discoverable via `tools/list`
+   - [ ] All tool schemas include `required` fields and examples
+   - [ ] Error responses follow MCP error format
+
+2. **Multi-Tenancy**
+   - [ ] Tenants can register multiple stores
+   - [ ] Master key authentication works
+   - [ ] Store lookup by name resolves credentials
+   - [ ] Zero credential leakage between tenants
+
+3. **API Coverage**
+   - [ ] All documented OrderDesk v2 endpoints mapped
+   - [ ] Full parameter exposure (no hidden defaults)
+   - [ ] Pagination controls (limit, page, since, sort) exposed
+
+4. **Mutation Safety**
+   - [ ] All mutations use fetch → mutate → upload
+   - [ ] Automatic retry on concurrency conflicts
+   - [ ] No partial update tools exposed
+
+5. **Session Context**
+   - [ ] `tenant.use_master_key` establishes session
+   - [ ] `stores.use_store` sets active store
+   - [ ] Tools use active store when `store_name` omitted
+
+6. **WebUI Functionality** (if enabled)
+   - [ ] Public signup flow works (email → magic link → account creation)
+   - [ ] Magic link login works (email → magic link → session)
+   - [ ] Master key displayed once during signup, then never again
+   - [ ] Store management UI works (register, view, edit, delete, test)
+   - [ ] API Test Console supports all documented OrderDesk parameters
+   - [ ] API Test Console displays raw request/response with timings
+   - [ ] Trace viewer filters logs by tenant/store/tool/status/date
+   - [ ] Audit log records all admin actions
+   - [ ] Master key rotation flow works (generate new, revoke old)
+
+### Non-Functional Requirements ✅
+
+7. **Performance**
+   - [ ] p95 latency < 500ms for cached reads
+   - [ ] p95 latency < 2s for writes
+   - [ ] Cache hit rate > 80% for repeated reads
+   - [ ] WebUI page load < 1s (if enabled)
+
+8. **Security**
+   - [ ] All API keys encrypted at rest (AES-256-GCM)
+   - [ ] No secrets in logs (redaction works)
+   - [ ] Per-tenant rate limiting enforced
+   - [ ] Master key hashes use strong algorithm (bcrypt/argon2)
+   - [ ] WebUI: CSRF protection on all state-changing operations
+   - [ ] WebUI: Rate limiting on login (5/min) and signup (2/min)
+   - [ ] WebUI: Secure cookies (HttpOnly, Secure, SameSite=Strict)
+   - [ ] WebUI: Magic links expire in 15 minutes
+   - [ ] WebUI: Sessions expire after 24 hours of inactivity
+
+9. **Reliability**
+   - [ ] Automatic retry on 429/5xx with backoff
+   - [ ] Health check endpoint returns status
+   - [ ] Structured logging with correlation IDs
+   - [ ] WebUI: Graceful degradation if Redis unavailable
+
+10. **Developer Experience**
+    - [ ] README covers quickstart (< 5 min to run)
+    - [ ] Docker deployment works out-of-box
+    - [ ] Example requests for all tools
+    - [ ] Validation errors include helpful examples
+    - [ ] WebUI: < 2 min from signup to first API call (if enabled)
+
+11. **Testing**
+    - [ ] Unit test coverage > 80%
+    - [ ] All critical paths tested
+    - [ ] CI pipeline green (lint, type check, test)
+    - [ ] Integration tests pass (when enabled)
+    - [ ] WebUI: E2E tests for signup, login, store management, API console
+
+---
+
+## Implementation Phases
+
+### Phase 1: Foundation (Week 1)
+- [ ] Project structure and dependencies
+- [ ] SQLite schema and migrations
+- [ ] Crypto service (HKDF, AES-GCM)
+- [ ] Tenant/store management
+- [ ] Basic MCP stdio server
+
+### Phase 2: Core Tools (Week 2)
+- [ ] OrderDesk client (httpx, retries)
+- [ ] Session context management
+- [ ] Orders tools (list, get, create, update_full)
+- [ ] Products tools (list, get, create, update)
+- [ ] Store settings tool
+
+### Phase 3: Advanced Features (Week 3)
+- [ ] Mutation tools (mutate_full, move_folder, etc.)
+- [ ] Cache service (memory backend)
+- [ ] Rate limiting
+- [ ] Audit logging
+
+### Phase 4: Production Ready (Week 4)
+- [ ] Redis cache backend
+- [ ] HTTP transport (health checks, webhooks)
+- [ ] Comprehensive tests
+- [ ] Documentation
+- [ ] Docker optimization
+- [ ] CI/CD pipeline
+
+---
+
+## References
+
+### External Documentation
+- **OrderDesk API:** https://apidocs.orderdesk.com/
+- **MCP Protocol:** https://modelcontextprotocol.io/
+- **HKDF (RFC 5869):** https://tools.ietf.org/html/rfc5869
+- **AES-GCM:** https://csrc.nist.gov/publications/detail/sp/800-38d/final
+
+### Internal Documentation
+- [`speckit.constitution`](./speckit.constitution) - Project constitution
+- [`README.md`](./README.md) - User-facing quickstart
+- [`docs/SETUP_GUIDE.md`](./docs/SETUP_GUIDE.md) - Deployment guide
+- [`docs/MCP_TOOLS_REFERENCE.md`](./docs/MCP_TOOLS_REFERENCE.md) - Complete tool catalog
+- [`docs/operations.md`](./docs/operations.md) - Operations guide
+- [`.env.example`](./.env.example) - Environment variables
+
+---
+
+## Changelog
+
+### v1.1.0 (2025-10-17)
+- Added optional WebUI component with admin interfaces
+- Magic link signup/login flow
+- API Test Console with full parameter support
+- Trace viewer for operation logs
+- Store management UI
+- Master key rotation and revocation
+- Audit logging for security events
+- WebUI-specific database tables (sessions, magic_links, master_key_metadata)
+- Comprehensive WebUI security requirements (CSRF, rate limiting, secure cookies)
+- WebUI-specific environment variables and configuration
+
+### v1.0.0 (2025-10-17)
+- Initial specification
+- Complete MCP tool catalog defined
+- Security model established (master keys, encryption)
+- Testing strategy outlined
+- Multi-tenant architecture
+
+---
+
+**END OF SPECIFICATION**
+

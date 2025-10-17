@@ -1,0 +1,929 @@
+# OrderDesk MCP Server: Project Constitution
+
+**Version:** 1.1  
+**Last Updated:** October 17, 2025  
+**Status:** Canonical Design Specification
+
+---
+
+## Executive Summary
+
+This document is the **canonical design specification** for the OrderDesk MCP Server—a multi-tenant, native MCP implementation that provides secure, type-safe programmatic access to the OrderDesk API. All implementation decisions, pull requests, and feature additions MUST align with this constitution.
+
+**Project Goal:** Enable Claude and other MCP clients to safely manage OrderDesk stores through a secure, well-typed, multi-tenant server that faithfully mirrors the OrderDesk API without abstraction or invention. An optional WebUI provides human-friendly admin interfaces for store management and API testing.
+
+**Reference:** [OrderDesk API Documentation](https://apidocs.orderdesk.com/)
+
+---
+
+## Part I: Guiding Principles
+
+### 1. Native MCP First (MUST)
+
+**Implementation:** Claude-style Model Context Protocol (MCP) via `stdio` transport.
+
+- **Primary Transport:** `stdio` (REQUIRED)
+- **Optional Transports:** Vendor-agnostic HTTP SSE/WebSocket (for web clients)
+- **HTTP Layer:** Thin adapter—health checks, webhooks, optional HTTP→MCP bridge, and optional WebUI
+- **No REST API:** This is not a REST service; it's an MCP server that happens to support HTTP operational endpoints
+- **WebUI as Tool:** Optional minimal web interface for admin tasks (signup, store management, API test console)
+
+**Rationale:** MCP is designed for AI-agent interaction. HTTP is secondary, used for operational monitoring, webhook ingestion, and human admin tasks. The WebUI provides a bridge for humans to manage tenants and test OrderDesk API calls without requiring an LLM.
+
+---
+
+### 2. Faithful API Mapping (MUST)
+
+**Contract:** Every MCP tool maps 1:1 to a documented OrderDesk API endpoint.
+
+- **Do NOT invent** endpoints, parameters, or response fields
+- **Do NOT hide** documented OrderDesk parameters "to simplify"
+- **Do NOT create** convenience abstractions that obscure the underlying API
+- If a capability is missing from OrderDesk, **explicitly state this in error messages** and reference the documentation
+
+**Examples:**
+- ✅ `orders.list` exposes `folder_id`, `status`, `since`, `sort`, `limit`, `page`, `search` (per OD docs)
+- ❌ `orders.list` accepts only `folder_id` and silently defaults `limit=50`
+- ✅ `orders.mutate_full` fetches the order, applies changes, uploads full object
+- ❌ `orders.patch` sends partial updates (OrderDesk doesn't support this cleanly)
+
+---
+
+### 3. Full-Order Updates Only (MUST)
+
+**Mutation Contract:** All order mutations follow the **fetch → mutate → full-upload** pattern.
+
+#### Standard Flow:
+1. **Fetch:** `GET /api/v2/orders/{id}` — retrieve the complete order object
+2. **Mutate:** Apply changes in-memory (merge/transform)
+3. **Upload:** `PUT /api/v2/orders/{id}` — send the full, updated order object
+4. **Retry:** On concurrency conflict (e.g., 409 or "order changed"), refetch and retry (up to N attempts)
+
+#### Why This Approach:
+- OrderDesk's API is optimized for full-object updates
+- Partial updates are not reliably documented
+- This pattern ensures consistency and allows for proper conflict resolution
+
+#### Convenience Tools (built on `mutate_full`):
+- `orders.move_folder(order_id, destination_folder_id)`
+- `orders.add_items(order_id, items)`
+- `orders.update_address(order_id, shipping_address)`
+- `orders.set_status(order_id, status)`
+
+**Non-Negotiable:** NEVER implement partial update endpoints. If OrderDesk adds official PATCH support in the future, document it explicitly before implementing.
+
+---
+
+### 4. Multi-Tenant by Master Key (MUST)
+
+**Tenant Model:**
+
+```
+Master Key (1)
+  ↓
+Stores (N)
+  ↓
+API Keys (N)
+```
+
+#### Key Concepts:
+- **Master Key:** A single secret owned by the tenant (user/org) that unlocks access to all their registered stores
+- **Store Registration:** Tenant registers `store_name`, `store_id`, `api_key` → encrypted and stored per tenant
+- **Session Context:** Tools can reference stores by `store_name`; the server resolves to `store_id` + `api_key` using the master key
+
+#### Security Flow:
+1. Client provides `master_key` (via session init or env var)
+2. Server derives per-tenant encryption key: `HKDF(MCP_KMS_KEY, master_key)`
+3. Server decrypts stored credentials and validates `store_name` lookup
+4. Server calls OrderDesk API with resolved `store_id` + `api_key`
+
+#### Why Master Keys:
+- Enables multi-store management without exposing raw API keys
+- Centralizes access control (revoke master key = revoke all store access)
+- Simplifies LLM tool calls (use `store_name` instead of `store_id` + `api_key` in every call)
+
+#### Public Signup (Optional):
+- If `ENABLE_PUBLIC_SIGNUP=true`, allow user registration via WebUI
+- Mint new Master Keys on signup (strong random generation)
+- Email verification optional but recommended
+- Rate limit signup to prevent abuse
+
+---
+
+### 5. Optional WebUI for Admin & Testing (SHOULD)
+
+**Purpose:** Provide a minimal, secure web interface for human administrators to manage their accounts and test OrderDesk API calls.
+
+#### WebUI Components:
+1. **Signup/Login:**
+   - User registration (if `ENABLE_PUBLIC_SIGNUP=true`)
+   - Login with Master Key
+   - Optional email verification
+   - Session management (JWT or secure cookies)
+
+2. **Store Management:**
+   - View registered stores
+   - Register new store (store_id + api_key)
+   - Edit store metadata (name, label)
+   - Delete store registration
+   - Test store credentials (verify with OrderDesk API)
+
+3. **API Test Console:**
+   - Select active store
+   - Choose OrderDesk endpoint (orders.list, orders.get, etc.)
+   - Fill form with parameters (all documented options exposed)
+   - Execute call and view raw response
+   - Save/load request templates
+   - View request/response logs with correlation IDs
+
+4. **Observability Dashboard (Optional):**
+   - Recent API calls log (filterable by tenant/store)
+   - Cache hit/miss rates
+   - Rate limit status
+   - Error trends
+
+#### Security Requirements:
+- **Authentication:** Master Key login or JWT session
+- **CSRF Protection:** Tokens on all state-changing operations
+- **Rate Limiting:** Per-IP and per-tenant rate limits
+- **Input Validation:** Same strict validation as MCP tools
+- **No Secret Display:** Never show decrypted API keys in UI
+- **Audit Logging:** Log all admin actions (store registration, deletion, etc.)
+
+#### Design Principles:
+- **Minimal and Functional:** Not a feature-rich dashboard; focus on essential admin tasks
+- **Mobile-Responsive:** Usable on phones/tablets
+- **Accessibility:** WCAG 2.1 Level AA compliance
+- **No External Dependencies:** Self-contained (no CDN dependencies in production)
+- **Progressive Enhancement:** Works with JS disabled for basic tasks
+
+**Why WebUI:**
+- Lowers barrier to entry (no CLI/LLM required for setup)
+- Enables manual API testing (verify integration outside agent flows)
+- Provides visibility into server state (logs, cache, rate limits)
+- Useful for debugging and troubleshooting
+
+**Non-Goals:**
+- Full-featured OrderDesk dashboard replacement
+- Real-time order management workflows
+- Advanced reporting or analytics
+- Multi-user collaboration features
+
+---
+
+### 6. Secure by Default (MUST)
+
+**Encryption:**
+- Store API keys encrypted at rest using **AES-256-GCM**
+- Derive per-tenant keys via **HKDF-SHA256**: `derive_key(MCP_KMS_KEY, master_key_hash)`
+- Store only **salted master key hashes** (never plaintext master keys)
+
+**Secrets Handling:**
+- **NEVER** log plaintext secrets (API keys, master keys, tokens)
+- **NEVER** include secrets in error messages shown to clients
+- **Redact** secrets in all structured logs: replace with `[REDACTED]` or hash prefix
+
+**Input Validation:**
+- Reject unknown parameters (no silent dropping)
+- Validate all inputs against Pydantic schemas
+- Enumerate allowed values where OrderDesk docs constrain them (e.g., `status`, `sort` fields)
+- Provide helpful error messages with examples
+
+**Access Control:**
+- Least privilege: Each tenant's master key grants access ONLY to their registered stores
+- No global admin backdoor
+- Rate limiting per tenant (default: 120 RPM, configurable)
+
+**WebUI Security (if enabled):**
+- **Session Management:** Secure cookies with `HttpOnly`, `Secure`, `SameSite=Strict`
+- **CSRF Protection:** Synchronizer tokens on all POST/PUT/DELETE operations
+- **Rate Limiting:** Per-IP limits on login (5 attempts/min), signup (2 attempts/min)
+- **Content Security Policy:** Strict CSP headers to prevent XSS
+- **Input Sanitization:** All form inputs validated and sanitized before processing
+- **No Client-Side Secrets:** Never send decrypted API keys or full Master Keys to browser
+- **Audit Trail:** Log all admin actions (login, store registration, credential tests)
+
+---
+
+### 7. Explicit Over Implicit (MUST)
+
+**Pagination & Filters:** Expose EVERY documented OrderDesk parameter. Let the LLM control pagination size and filtering.
+
+#### Example: `orders.list` Parameters (from OD docs)
+```python
+class OrdersListParams(BaseModel):
+    store_name: str = Field(..., description="Store name from tenant registry")
+    folder_id: Optional[str] = Field(None, description="OrderDesk folder ID filter")
+    status: Optional[str] = Field(None, description="Order status (e.g., 'new', 'shipped')")
+    since: Optional[datetime] = Field(None, description="ISO8601; return orders updated since this time")
+    sort: Optional[str] = Field(None, description="Sort mode: 'date_added', 'date_updated', etc.")
+    limit: int = Field(50, ge=1, le=250, description="Max records per page (1-250)")
+    page: int = Field(1, ge=1, description="Page number starting at 1")
+    search: Optional[str] = Field(None, description="Free text search query")
+    # Include ALL other documented OD params—do not hide any
+```
+
+**Why This Matters:**
+- The LLM needs full control to balance cost vs. completeness
+- Silent defaults (e.g., `limit=50`) can truncate results without the LLM knowing
+- Explicit parameters enable the LLM to paginate intelligently
+
+**Validation Errors:** When input fails validation, provide:
+- Clear error message
+- List of missing required fields
+- Example of a valid request
+
+---
+
+### 8. Observability (MUST)
+
+**Structured Logging:**
+- Use JSON logs with consistent fields: `timestamp`, `level`, `message`, `request_id`, `tenant_id`, `store_id`, `tool_name`, `duration_ms`
+- Assign a unique `request_id` to every tool call (UUID or correlation ID)
+- Log all API calls to OrderDesk (method, endpoint, status, duration)
+- Log retries, backoff attempts, and cache hits/misses
+
+**Metrics:**
+- Cache hit rate per resource type (orders, products, customers)
+- API call latency (p50, p95, p99)
+- Retry counts per tool
+- Rate limit exhaustion events
+
+**Error Tracking:**
+- Distinguish between client errors (4xx) and server errors (5xx)
+- Track concurrency conflict retries (for mutation operations)
+- Alert on repeated auth failures (possible key rotation or credential issue)
+
+---
+
+### 9. Port/Proxy Agnostic (SHOULD)
+
+**Deployment Model:** This server is designed to run behind a reverse proxy or tunnel (e.g., Cloudflare Tunnel, nginx, Caddy).
+
+- **Bind:** `0.0.0.0:${PORT:-8080}` (default: 8080)
+- **No Hardcoded Ports:** Use env var `PORT` to configure
+- **TLS Termination:** Handled by proxy, NOT by the application
+- **Proxy Headers:** When `TRUST_PROXY=true`, derive client IP from `X-Forwarded-For`, `CF-Connecting-IP`, etc.
+
+**Health Check Endpoint:**
+```
+GET /health → 200 OK
+{
+  "status": "ok",
+  "version": "0.1.0",
+  "uptime_seconds": 3600
+}
+```
+
+**Why This Approach:**
+- Simplifies deployment (no cert management in-app)
+- Compatible with Cloudflare Tunnel, Railway, Fly.io, Render, etc.
+- Allows for zero-downtime deployments via proxy routing
+
+---
+
+### 10. Testability & CI (MUST)
+
+**Test Coverage:**
+- **Unit Tests:** Tenant auth, store lookup, mutation logic, validation, retry logic
+- **Integration Tests:** Optional; require `ORDERDESK_TEST_STORE_ID` and `ORDERDESK_TEST_API_KEY`
+- **Golden Examples:** `/examples` directory with valid request/response pairs for each tool
+
+**CI Pipeline (GitHub Actions):**
+1. Lint: `ruff check .`
+2. Format: `black --check .`
+3. Type Check: `mypy mcp_server/`
+4. Test: `pytest tests/`
+5. Docker Build: `docker build -t orderdesk-mcp-server .`
+
+**Conventional Commits:** Enforce commit message format:
+- `feat:` — new feature
+- `fix:` — bug fix
+- `docs:` — documentation changes
+- `test:` — test additions/updates
+- `refactor:` — code restructuring without behavior change
+- `chore:` — maintenance tasks (deps, CI, etc.)
+
+**Release Tagging:** Semantic versioning (`v0.x.y`)
+
+---
+
+### 11. Documentation as Interface (MUST)
+
+**Tool Schemas:** Every MCP tool MUST include:
+- **Description:** What the tool does, which OD endpoint it calls
+- **Parameters:** Full JSON Schema with `type`, `description`, `required`, `default`, `examples`
+- **Examples:** At least one valid request/response pair
+- **Error Handling:** Document expected error codes and how to handle them
+
+**Example:**
+```python
+class OrdersListTool:
+    name = "orders.list"
+    description = """
+    List orders from an OrderDesk store with filtering and pagination.
+    Maps to: GET https://app.orderdesk.me/api/v2/orders
+    Docs: https://apidocs.orderdesk.com/#get-multiple-orders
+    """
+    parameters = OrdersListParams
+    
+    @staticmethod
+    def example():
+        return {
+            "store_name": "my-store",
+            "folder_id": "21654",
+            "limit": 100,
+            "page": 1,
+            "since": "2025-10-01T00:00:00Z"
+        }
+```
+
+**Why This Matters:**
+- MCP clients (Claude) learn from tool schemas
+- Good descriptions and examples reduce trial-and-error
+- Explicit `required` lists prevent missing parameter errors
+
+---
+
+## Part II: Non-Negotiables
+
+These are HARD CONSTRAINTS that MUST NOT be violated:
+
+1. **No Partial Order Updates:** Always use full-object updates (fetch → mutate → upload)
+2. **No Silent Pagination Defaults:** Expose `limit`, `page`, and all pagination controls; document defaults clearly
+3. **No Plaintext Secrets:** All API keys and master keys MUST be encrypted at rest; never logged or displayed in UI
+4. **No Global State Across Tenants:** Each request is scoped to a tenant; no shared mutable state
+5. **No Invented Endpoints:** Only implement documented OrderDesk API endpoints; expose ALL documented parameters
+6. **No Auto-Retry of Destructive Actions:** Retries are ONLY for network errors and concurrency conflicts, NOT for deletes or creates
+7. **WebUI is Optional:** The server MUST function fully without WebUI enabled; stdio MCP is the primary interface
+
+---
+
+## Part III: Architecture
+
+### High-Level Architecture
+
+```
+┌─────────────┐         ┌──────────────┐
+│ MCP Client  │         │   Web UI     │
+│ (Claude)    │         │  (Browser)   │
+│  stdio      │         │  HTTPS       │
+└──────┬──────┘         └──────┬───────┘
+       │                       │
+       └───────────┬───────────┘
+                   │
+                   v
+┌──────────────────────────────────────────────────────┐
+│              OrderDesk MCP Server (Python)           │
+│                                                      │
+│  ┌────────────────────────────────────────────────┐ │
+│  │         MCP Protocol Layer                     │ │
+│  │  (stdio, optional HTTP SSE/WS)                 │ │
+│  └──────────────────┬─────────────────────────────┘ │
+│                     │                                │
+│  ┌──────────────────v─────────────────────────────┐ │
+│  │         Optional WebUI Layer                   │ │
+│  │  - Signup/Login (JWT sessions)                 │ │
+│  │  - Store Management UI                         │ │
+│  │  - API Test Console                            │ │
+│  │  - Observability Dashboard                     │ │
+│  │  (CSRF protected, rate limited)                │ │
+│  └──────────────────┬─────────────────────────────┘ │
+│                     │                                │
+│  ┌──────────────────v─────────────────────────────┐ │
+│  │         Tools / Routers                        │ │
+│  │  - tenant.use_master_key                       │ │
+│  │  - stores.register, stores.list                │ │
+│  │  - orders.list, orders.mutate_full             │ │
+│  │  - products.list, shipments.create             │ │
+│  └──────────────────┬─────────────────────────────┘ │
+│                     │                                │
+│  ┌──────────────────v─────────────────────────────┐ │
+│  │         Services Layer                         │ │
+│  │  - OrderDeskClient (httpx, retries)            │ │
+│  │  - TenantService (master key auth)             │ │
+│  │  - CacheService (memory/redis)                 │ │
+│  │  - CryptoService (HKDF, AES-GCM)               │ │
+│  │  - SessionService (WebUI auth)                 │ │
+│  └──────────────────┬─────────────────────────────┘ │
+│                     │                                │
+│  ┌──────────────────v─────────────────────────────┐ │
+│  │         Data Layer                             │ │
+│  │  - SQLite (tenants, stores, sessions)          │ │
+│  │  - Redis (optional cache + session store)      │ │
+│  └────────────────────────────────────────────────┘ │
+│                                                      │
+└────────────────────────┬─────────────────────────────┘
+                         │
+                         v
+                  ┌──────────────┐
+                  │ OrderDesk API│
+                  └──────────────┘
+```
+
+### Directory Structure
+
+```
+mcp_server/
+├── __init__.py
+├── main.py              # Entry point (stdio MCP server)
+├── mcp_server.py        # MCP protocol implementation
+├── config.py            # Environment config
+├── auth/
+│   ├── crypto.py        # Encryption/decryption (AES-GCM, HKDF)
+│   ├── middleware.py    # Auth middleware (master key validation)
+│   └── session.py       # WebUI session management (JWT)
+├── models/
+│   ├── database.py      # SQLAlchemy models (tenants, stores, sessions)
+│   └── orderdesk.py     # Pydantic models (orders, products, etc.)
+├── routers/             # MCP tool definitions
+│   ├── orders.py        # orders.list, orders.mutate_full, etc.
+│   ├── products.py      # products.list, products.get, etc.
+│   ├── stores.py        # stores.register, stores.list
+│   └── webhooks.py      # webhook ingestion (HTTP only)
+├── services/
+│   ├── orderdesk.py     # OrderDesk API client
+│   ├── tenant.py        # Tenant/store lookup & auth
+│   └── cache.py         # Cache abstraction (memory/sqlite/redis)
+├── webui/               # Optional WebUI (if enabled)
+│   ├── __init__.py
+│   ├── app.py           # FastAPI app (or Flask)
+│   ├── routes/
+│   │   ├── auth.py      # Signup, login, logout
+│   │   ├── stores.py    # Store management UI
+│   │   ├── console.py   # API test console
+│   │   └── dashboard.py # Observability dashboard
+│   ├── templates/       # HTML templates (Jinja2)
+│   │   ├── base.html
+│   │   ├── login.html
+│   │   ├── stores.html
+│   │   └── console.html
+│   ├── static/          # CSS, JS, images
+│   │   ├── css/
+│   │   ├── js/
+│   │   └── img/
+│   └── middleware/
+│       ├── csrf.py      # CSRF protection
+│       └── rate_limit.py # Per-IP rate limiting
+└── utils/
+    ├── logging.py       # Structured logging
+    └── proxy.py         # Proxy header parsing
+```
+
+---
+
+## Part IV: Detailed Requirements
+
+### A. HTTP/Proxy Behavior (SHOULD)
+
+- **Bind:** `0.0.0.0:${PORT:-8080}`
+- **Health Check:** `GET /health` → `{"status": "ok"}`
+- **Proxy Trust:** If `TRUST_PROXY=true`, derive client IP from `X-Forwarded-For`, `CF-Connecting-IP`
+- **No TLS Termination:** TLS is handled by reverse proxy
+
+---
+
+### B. Python Code Style (MUST)
+
+- **Typing:** Full type hints on all functions; use `from __future__ import annotations`
+- **Linting:** `ruff` + `black`
+- **Type Checking:** `mypy --strict` for core packages
+- **Structure:** Follow the directory layout above
+- **Errors:** Define domain exceptions:
+  - `OrderDeskError` (base)
+  - `ValidationError` (input validation)
+  - `AuthError` (master key/store auth)
+  - `ConflictError` (concurrency conflict during mutation)
+
+---
+
+### C. Order Mutation Design (MUST)
+
+#### Generic Mutation Tool:
+```python
+orders.mutate_full(
+    store_name: str,
+    order_id: str,
+    mutation: Optional[dict] = None,
+    ops: Optional[List[Operation]] = None
+)
+```
+
+**Flow:**
+1. Fetch current order: `GET /api/v2/orders/{order_id}`
+2. Apply mutation:
+   - If `mutation` is provided: deep-merge into fetched order
+   - If `ops` is provided: apply each operation (move_folder, add_items, etc.)
+3. Upload full order: `PUT /api/v2/orders/{order_id}`
+4. On concurrency conflict (409 or error message): refetch and retry (up to N times)
+
+#### Convenience Tools (built on `mutate_full`):
+- `orders.move_folder(store_name, order_id, destination_folder_id)`
+- `orders.add_items(store_name, order_id, items: List[OrderItem])`
+- `orders.update_address(store_name, order_id, address_type: str, address: Address)`
+- `orders.set_status(store_name, order_id, status: str)`
+
+**Why Convenience Tools:**
+- Reduce token usage for common operations
+- Provide type-safe interfaces for specific mutations
+- Still use `mutate_full` under the hood (no special-case logic)
+
+---
+
+### D. Pagination & Throughput (MUST)
+
+**Every listing tool MUST expose:**
+- `limit` / `per_page` (with min/max validation)
+- `page` (starting at 1)
+- `since` (datetime filter, if supported by OD)
+- `sort` (if supported by OD)
+- Any OD-specific cursors or filters
+
+**Validation:** If a request omits pagination params, use documented OD defaults but **log a warning** that defaults were applied.
+
+**Documentation:** Tool descriptions MUST document default pagination behavior.
+
+---
+
+### E. Testing (MUST)
+
+#### Unit Tests (Required):
+- Tenant auth: master key validation, store lookup by name
+- Mutation logic: apply mutation to order object, retry on conflict
+- Pagination: validate `limit`/`page` constraints
+- Validation errors: missing required fields, invalid enums
+
+#### Integration Tests (Optional, env-gated):
+- Require `ORDERDESK_TEST_STORE_ID` and `ORDERDESK_TEST_API_KEY`
+- Test real API calls (GET orders, create order, mutate order, delete order)
+- Clean up test data after each run
+
+#### Golden Examples (`/examples`):
+- One file per tool: `orders_list.json`, `orders_mutate_full.json`, etc.
+- Each file contains:
+  - `request`: Valid input parameters
+  - `response`: Expected output (or sample)
+
+---
+
+### F. Caching (SHOULD)
+
+**Read-Through Cache:**
+- Cache GETs (orders, products, customers)
+- Backends: memory (default), sqlite, redis
+- TTL: orders (15s), products (60s), customers (60s)
+
+**Invalidation:**
+- On write/mutation, invalidate affected cache keys
+- Example: `orders.mutate_full(order_id)` → invalidate `orders:{order_id}`
+
+**Why Cache:**
+- Reduce API calls to OrderDesk (stay under rate limits)
+- Improve latency for repeated reads
+- Configurable TTL allows tuning freshness vs. performance
+
+---
+
+### G. Documentation (MUST)
+
+**Files:**
+1. **README.md:** Quickstart, Docker setup, master key tenancy, store registration, example tool calls
+2. **docs/SETUP_GUIDE.md:** Detailed setup with Cloudflare Tunnel, Railway, Render, etc.
+3. **docs/MCP_TOOLS_REFERENCE.md:** Complete tool catalog with parameters and examples
+4. **docs/operations.md:** Full-order update contract, retries, caching, rate limits
+5. **.env.example:** All env vars with comments and safe defaults
+
+---
+
+### H. Security Best Practices (MUST)
+
+**Encryption:**
+- Algorithm: AES-256-GCM
+- Key Derivation: HKDF-SHA256 with `MCP_KMS_KEY` as IKM and `master_key_hash` as salt
+- Store: Only salted master key hashes (bcrypt or argon2)
+
+**Redaction:**
+- Never log plaintext secrets
+- Replace secrets with `[REDACTED]` or first 8 chars of hash
+
+**Rate Limiting:**
+- Per-tenant: 120 RPM (default, configurable)
+- Per-tool: Optional quotas (e.g., `orders.delete` limited to 10/min)
+
+**Input Hardening:**
+- Reject unknown parameters
+- Validate enums against documented OD values
+- Sanitize user input (no SQL injection, no script injection)
+
+---
+
+### I. Git & CI (MUST)
+
+**Commit Format:** Conventional Commits (enforced via pre-commit hook or CI)
+
+**CI Pipeline:**
+1. Lint: `ruff check .`
+2. Format: `black --check .`
+3. Type: `mypy mcp_server/`
+4. Test: `pytest tests/ --cov=mcp_server --cov-report=term-missing`
+5. Docker: `docker build -t orderdesk-mcp-server .`
+
+**Release Process:**
+1. Update version in `pyproject.toml`
+2. Tag release: `git tag v0.x.y`
+3. Push: `git push origin v0.x.y`
+4. CI builds and pushes Docker image to registry
+
+---
+
+## Part V: Checklists
+
+### Definition of Done (Every PR)
+- [ ] All new tools have JSON Schemas with `required` and examples
+- [ ] Order mutations use fetch → mutate → full-upload
+- [ ] Tests added/updated; CI green
+- [ ] Logs include `request_id`, `tenant_id`, `store_id`
+- [ ] Secrets redacted; no plaintext keys in code/docs/UI
+- [ ] README/docs updated with any new tools or params
+- [ ] WebUI changes (if applicable): CSRF protected, rate limited, input validated
+
+### New Tool Checklist
+- [ ] Mirrors a documented OD endpoint (linked in docstring)
+- [ ] Exposes ALL OD options (filters, pagination, sort)
+- [ ] Validates input; produces descriptive errors with examples
+- [ ] Unit test covers happy path + validation + OD error handling
+- [ ] Example request/response added to `/examples`
+
+### Mutation Tool Checklist
+- [ ] Uses `orders.get` to fetch full object
+- [ ] Applies mutation deterministically
+- [ ] Calls `orders.update_full` with complete object
+- [ ] Retries on concurrency mismatch
+- [ ] Invalidates cache keys
+
+### WebUI Feature Checklist (if applicable)
+- [ ] Protected by authentication (master key or JWT session)
+- [ ] CSRF tokens on all state-changing forms
+- [ ] Rate limiting per IP and per tenant
+- [ ] Input validation matches MCP tool validation
+- [ ] No secrets displayed in HTML (API keys, full master keys)
+- [ ] Responsive design (mobile-friendly)
+- [ ] Accessibility tested (WCAG 2.1 Level AA)
+- [ ] Works with JavaScript disabled (for basic features)
+- [ ] Audit logging for admin actions
+
+---
+
+## Part VI: Example Snippets
+
+### Tool Definition: `orders.list`
+
+```python
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
+
+class OrdersListParams(BaseModel):
+    store_name: str = Field(..., description="Store name from tenant registry")
+    folder_id: Optional[str] = Field(None, description="OrderDesk folder ID filter")
+    status: Optional[str] = Field(None, description="Order status filter (e.g., 'new', 'shipped')")
+    since: Optional[datetime] = Field(None, description="ISO8601; return orders updated since this time")
+    sort: Optional[str] = Field(None, description="Sort mode: 'date_added', 'date_updated', etc.")
+    limit: int = Field(50, ge=1, le=250, description="Max records per page (1-250)")
+    page: int = Field(1, ge=1, description="Page number starting at 1")
+    search: Optional[str] = Field(None, description="Free text search query")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "store_name": "my-store",
+                "folder_id": "21654",
+                "limit": 100,
+                "page": 1,
+                "since": "2025-10-01T00:00:00Z"
+            }
+        }
+```
+
+### Tool Definition: `orders.mutate_full`
+
+```python
+from pydantic import BaseModel, Field, model_validator
+from typing import Optional, List, Literal
+
+class MutationOp(BaseModel):
+    op: Literal["move_folder", "add_items", "remove_items", "update_address", "set_status"]
+    # Define exact fields per op type—do not invent
+
+class OrdersMutateFullParams(BaseModel):
+    store_name: str = Field(..., description="Store name from tenant registry")
+    order_id: str = Field(..., description="OrderDesk order ID")
+    mutation: Optional[dict] = Field(None, description="Deep-merge object to apply to fetched order")
+    ops: Optional[List[MutationOp]] = Field(None, description="Typed mutation operations")
+    
+    @model_validator(mode="after")
+    def validate_mutation_xor_ops(self):
+        if self.mutation and self.ops:
+            raise ValueError("Provide either 'mutation' or 'ops', not both")
+        if not self.mutation and not self.ops:
+            raise ValueError("Must provide either 'mutation' or 'ops'")
+        return self
+```
+
+### Validation Error Helper
+
+```python
+from typing import Optional, Dict, Any, List
+
+def validation_error(
+    detail: str,
+    missing: Optional[List[str]] = None,
+    example: Optional[Dict[str, Any]] = None
+) -> dict:
+    """Return a validation error in MCP format"""
+    return {
+        "error": {
+            "code": "VALIDATION_ERROR",
+            "message": detail,
+            "details": {
+                "missing_fields": missing or [],
+                "example_request": example or {}
+            }
+        }
+    }
+```
+
+---
+
+## Part VII: Non-Goals (AVOID)
+
+These are explicitly OUT OF SCOPE:
+
+### MCP/API Non-Goals:
+1. **No Partial Order Updates:** Do not implement PATCH-like endpoints unless OrderDesk documents them officially
+2. **No Silent Parameter Dropping:** Reject unknown parameters; do not silently ignore them
+3. **No Global Mutable State:** All state is scoped to tenant/session; no shared globals across tenants
+4. **No Auto-Retry of Destructive Actions:** Retries are for network errors and concurrency conflicts only—never auto-retry deletes or creates
+5. **No Helpful Auto-Corrections:** If the LLM provides invalid input, return a clear error; do not "fix" it silently
+
+### WebUI Non-Goals:
+6. **No Full-Featured OrderDesk Dashboard:** WebUI is NOT a replacement for OrderDesk's native dashboard
+7. **No Real-Time Order Management:** No drag-and-drop order workflows, bulk actions UI, or advanced order processing
+8. **No Analytics/Reporting:** No charts, graphs, or business intelligence features
+9. **No Multi-User Collaboration:** No user permissions, roles, teams, or shared workspaces
+10. **No Mobile Apps:** Web interface only; no native iOS/Android apps
+11. **No External Integrations UI:** No UI for managing webhooks, shipping providers, or third-party connections
+12. **No Order Fulfillment Workflows:** Use OrderDesk's native UI or MCP tools for complex workflows
+
+---
+
+## Part VIII: Environment Variables
+
+**Required:**
+- `MCP_KMS_KEY`: Master encryption key (32+ bytes, base64 encoded)
+
+**Optional - Core:**
+- `PORT`: HTTP server port (default: 8080)
+- `DATABASE_URL`: Database connection string (default: sqlite:///data/app.db)
+- `REDIS_URL`: Redis connection string (default: none, use in-memory cache)
+- `TRUST_PROXY`: Enable proxy header parsing (default: false)
+- `RATE_LIMIT_RPM`: Requests per minute per tenant (default: 120)
+- `LOG_LEVEL`: Logging level (default: INFO)
+- `CACHE_TTL_ORDERS`: Cache TTL for orders in seconds (default: 15)
+- `CACHE_TTL_PRODUCTS`: Cache TTL for products in seconds (default: 60)
+
+**Optional - WebUI:**
+- `ENABLE_WEBUI`: Enable optional web interface (default: false)
+- `ENABLE_PUBLIC_SIGNUP`: Allow public user registration (default: false)
+- `JWT_SECRET_KEY`: Secret key for JWT signing (required if ENABLE_WEBUI=true)
+- `SESSION_TIMEOUT`: Session timeout in seconds (default: 86400, 24 hours)
+- `REQUIRE_EMAIL_VERIFICATION`: Require email verification on signup (default: false)
+- `SMTP_HOST`: SMTP server for email verification (required if REQUIRE_EMAIL_VERIFICATION=true)
+- `SMTP_PORT`: SMTP port (default: 587)
+- `SMTP_USER`: SMTP username
+- `SMTP_PASSWORD`: SMTP password
+- `SMTP_FROM`: From email address
+- `WEBUI_RATE_LIMIT_LOGIN`: Login attempts per IP per minute (default: 5)
+- `WEBUI_RATE_LIMIT_SIGNUP`: Signup attempts per IP per minute (default: 2)
+
+---
+
+## Part IX: Deployment Scenarios
+
+### Scenario 1: Cloudflare Tunnel (Recommended)
+```bash
+docker run -d \
+  -e MCP_KMS_KEY=<base64-key> \
+  -e TRUST_PROXY=true \
+  -v $(pwd)/data:/app/data \
+  orderdesk-mcp-server
+
+cloudflared tunnel --url http://localhost:8080
+```
+
+### Scenario 2: Railway / Render
+- Set env vars in dashboard
+- Deploy via Dockerfile
+- Health check endpoint: `/health`
+
+### Scenario 3: Local Development
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -e .
+export MCP_KMS_KEY=$(openssl rand -base64 32)
+python -m mcp_server.main
+```
+
+---
+
+## Part X: Versioning & Changelog
+
+**Semantic Versioning:** `MAJOR.MINOR.PATCH`
+- **MAJOR:** Breaking changes to MCP tool signatures or tenant model
+- **MINOR:** New tools, new OD endpoint mappings, non-breaking enhancements
+- **PATCH:** Bug fixes, docs updates, dependency updates
+
+**Changelog:** Keep `CHANGELOG.md` updated with each release, following [Keep a Changelog](https://keepachangelog.com/) format.
+
+---
+
+## Part XI: Support & Contribution
+
+**Questions:** Open a GitHub issue with the `question` label
+
+**Bug Reports:** Include:
+- MCP tool name
+- Request parameters (redact secrets!)
+- Expected behavior
+- Actual behavior
+- Server logs (redact secrets!)
+
+**Feature Requests:** Must align with documented OrderDesk API capabilities. If requesting a new tool, link to the relevant OD API docs.
+
+**Pull Requests:** Must pass CI and satisfy the **Definition of Done** checklist above.
+
+---
+
+## Appendix: OrderDesk API Reference
+
+**Base URL:** `https://app.orderdesk.me/api/v2`
+
+**Authentication Headers:**
+```
+ORDERDESK-STORE-ID: <store_id>
+ORDERDESK-API-KEY: <api_key>
+```
+
+**Key Endpoints:**
+- Orders: `/orders`, `/orders/{id}`
+- Products/Inventory: `/inventory-items`, `/inventory-items/{id}`
+- Shipments: `/shipments`, `/shipments/{id}`
+- Store Settings: `/store`
+- Move Orders: `/move-orders` (batch)
+
+**Rate Limits (per OrderDesk docs as of Oct 2025):**
+- **Leaky Bucket:** 20 initial requests, refill at 3 req/sec
+- **Effective Rate:** ~100 requests per rolling 30s window
+- **Headers:** `X-Tokens-Remaining`, `X-Retry-After`
+
+**Full Docs:** https://apidocs.orderdesk.com/
+
+---
+
+## Conclusion
+
+This constitution is the **single source of truth** for the OrderDesk MCP Server project. All code, documentation, and design decisions MUST align with these principles. When in doubt, refer to this document and the [OrderDesk API documentation](https://apidocs.orderdesk.com/).
+
+### Key Principles Summary
+
+1. **MCP First:** stdio transport is primary; HTTP and WebUI are optional enhancements
+2. **Faithful API Mapping:** No invented endpoints; expose ALL OrderDesk parameters
+3. **Full-Order Updates:** No partial updates; always fetch → mutate → upload
+4. **Multi-Tenant Security:** Master key architecture with encrypted credentials
+5. **Optional WebUI:** Minimal admin interface for signup, store management, and API testing
+6. **Secure by Default:** CSRF, rate limiting, input validation, audit logging
+7. **Observability:** Structured logs, correlation IDs, clear error messages
+
+### WebUI Philosophy
+
+The optional WebUI exists to:
+- Lower the barrier to entry (no CLI required for setup)
+- Enable manual API testing (verify integrations outside LLM flows)
+- Provide visibility into server state (logs, cache, rate limits)
+
+The WebUI does NOT replace:
+- OrderDesk's native dashboard (for day-to-day operations)
+- MCP tools (the primary interface for AI agents)
+- Advanced order management workflows
+
+**Amendments:** Changes to this constitution require explicit approval and must be documented in the git history with rationale.
+
+**Version History:**
+- v1.0 (2025-10-17): Initial constitution
+- v1.1 (2025-10-17): Added optional WebUI component, public signup, security enhancements
+
+---
+
+**END OF CONSTITUTION**
+

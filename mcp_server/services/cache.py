@@ -6,7 +6,7 @@ import json
 import sqlite3
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 try:
     import redis.asyncio as redis
@@ -23,7 +23,7 @@ class CacheBackend(ABC):
     """Abstract cache backend interface."""
 
     @abstractmethod
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Get value from cache."""
         pass
 
@@ -47,10 +47,10 @@ class MemoryCacheBackend(CacheBackend):
     """In-memory cache backend."""
 
     def __init__(self):
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Get value from memory cache."""
         async with self._lock:
             if key in self._cache:
@@ -105,18 +105,18 @@ class SqliteCacheBackend(CacheBackend):
         conn.commit()
         conn.close()
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Get value from SQLite cache."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
+
         cursor.execute(
             "SELECT value FROM cache WHERE key = ? AND expires > ?",
             (key, int(time.time()))
         )
         result = cursor.fetchone()
         conn.close()
-        
+
         if result:
             return json.loads(result[0])
         return None
@@ -125,7 +125,7 @@ class SqliteCacheBackend(CacheBackend):
         """Set value in SQLite cache."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
+
         cursor.execute(
             "INSERT OR REPLACE INTO cache (key, value, expires) VALUES (?, ?, ?)",
             (key, json.dumps(value), int(time.time()) + ttl)
@@ -137,7 +137,7 @@ class SqliteCacheBackend(CacheBackend):
         """Delete key from SQLite cache."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
+
         cursor.execute("DELETE FROM cache WHERE key = ?", (key,))
         conn.commit()
         conn.close()
@@ -146,7 +146,7 @@ class SqliteCacheBackend(CacheBackend):
         """Invalidate keys matching pattern."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
+
         cursor.execute("DELETE FROM cache WHERE key LIKE ?", (f"%{pattern}%",))
         conn.commit()
         conn.close()
@@ -159,7 +159,7 @@ class RedisCacheBackend(CacheBackend):
         if redis is None:
             raise ImportError("Redis not available. Install with: pip install redis")
         self.redis_url = redis_url
-        self._redis: Optional[redis.Redis] = None
+        self._redis: redis.Redis | None = None
 
     async def _get_redis(self):
         """Get Redis connection."""
@@ -167,7 +167,7 @@ class RedisCacheBackend(CacheBackend):
             self._redis = redis.from_url(self.redis_url, decode_responses=True)
         return self._redis
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Get value from Redis cache."""
         try:
             redis_client = await self._get_redis()
@@ -221,7 +221,7 @@ class CacheManager:
     def _create_backend(self) -> CacheBackend:
         """Create cache backend based on configuration."""
         backend_type = settings.cache_backend.lower()
-        
+
         if backend_type == "memory":
             return MemoryCacheBackend()
         elif backend_type == "sqlite":
@@ -239,7 +239,7 @@ class CacheManager:
         """Generate cache key."""
         return f"{tenant_id}:{store_id}:{endpoint}:{query_hash}"
 
-    def _hash_query(self, params: Optional[Dict] = None) -> str:
+    def _hash_query(self, params: dict | None = None) -> str:
         """Hash query parameters for cache key."""
         if not params:
             return "default"
@@ -250,8 +250,8 @@ class CacheManager:
         tenant_id: str,
         store_id: str,
         endpoint: str,
-        params: Optional[Dict] = None,
-    ) -> Optional[Any]:
+        params: dict | None = None,
+    ) -> Any | None:
         """Get value from cache."""
         query_hash = self._hash_query(params)
         key = self._generate_key(tenant_id, store_id, endpoint, query_hash)
@@ -263,15 +263,15 @@ class CacheManager:
         store_id: str,
         endpoint: str,
         value: Any,
-        params: Optional[Dict] = None,
+        params: dict | None = None,
     ) -> None:
         """Set value in cache."""
         query_hash = self._hash_query(params)
         key = self._generate_key(tenant_id, store_id, endpoint, query_hash)
-        
+
         # Determine TTL based on endpoint
         ttl = self.ttls.get(endpoint.split("/")[0], 300)  # Default 5 minutes
-        
+
         await self.backend.set(key, value, ttl)
 
     async def invalidate_store(self, tenant_id: str, store_id: str) -> None:

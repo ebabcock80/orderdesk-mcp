@@ -3,15 +3,13 @@
 import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from mcp import types
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 
-from mcp_server.config import settings
-from mcp_server.models.database import get_db
 from mcp_server.services.orderdesk import OrderDeskService
 from mcp_server.utils.logging import logger
 
@@ -27,7 +25,7 @@ orderdesk_service = OrderDeskService()
 
 
 @server.list_tools()
-async def handle_list_tools() -> List[types.Tool]:
+async def handle_list_tools() -> list[types.Tool]:
     """List available tools."""
     return [
         types.Tool(
@@ -421,21 +419,21 @@ async def handle_list_tools() -> List[types.Tool]:
 
 
 @server.call_tool()
-async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
+async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
     """Handle tool calls."""
     try:
         logger.info(f"Tool called: {name} with arguments: {arguments}")
-        
+
         # OrderDesk API doesn't use tenant_id - we'll use the store_id directly
         # The tenant_id concept was from our multi-tenant architecture, but OrderDesk is simpler
-        
+
         if name == "health_check":
             result = {"status": "ok", "message": "OrderDesk MCP Server is healthy"}
-            
+
         elif name == "list_stores":
             # For now, return a simple response since we don't have a tenant system
             result = {"stores": [], "message": "No tenant system - use create_store to add a store"}
-            
+
         elif name == "create_store":
             # Store the store credentials directly without tenant system
             result = await orderdesk_service.create_store_simple(
@@ -443,10 +441,10 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 arguments["api_key"],
                 arguments["name"]
             )
-            
+
         elif name == "delete_store":
             result = {"message": "Store deletion not implemented in simplified mode"}
-            
+
         elif name == "list_orders":
             result = await orderdesk_service.list_orders_direct(
                 arguments["store_id"],
@@ -456,21 +454,21 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 status=arguments.get("status"),
                 folder_id=arguments.get("folder_id")
             )
-            
+
         elif name == "get_order":
             result = await orderdesk_service.get_order_direct(
                 arguments["store_id"],
                 arguments["api_key"],
                 arguments["order_id"]
             )
-            
+
         elif name == "create_order":
             result = await orderdesk_service.create_order_direct(
                 arguments["store_id"],
                 arguments["api_key"],
                 arguments["order_data"]
             )
-            
+
         elif name == "update_order":
             result = await orderdesk_service.update_order_direct(
                 arguments["store_id"],
@@ -478,14 +476,14 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 arguments["order_id"],
                 arguments["order_data"]
             )
-            
+
         elif name == "delete_order":
             result = await orderdesk_service.delete_order_direct(
                 arguments["store_id"],
                 arguments["api_key"],
                 arguments["order_id"]
             )
-            
+
         elif name == "mutate_order":
             result = await orderdesk_service.mutate_order_direct(
                 arguments["store_id"],
@@ -493,7 +491,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 arguments["order_id"],
                 arguments["mutator"]
             )
-            
+
         elif name == "list_products":
             result = await orderdesk_service.list_products_direct(
                 arguments["store_id"],
@@ -502,14 +500,14 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 limit=arguments.get("limit", 50),
                 offset=arguments.get("offset", 0)
             )
-            
+
         elif name == "get_product":
             result = await orderdesk_service.get_product_direct(
                 arguments["store_id"],
                 arguments["api_key"],
                 arguments["product_id"]
             )
-            
+
         elif name == "list_customers":
             result = await orderdesk_service.list_customers_direct(
                 arguments["store_id"],
@@ -518,20 +516,20 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 limit=arguments.get("limit", 50),
                 offset=arguments.get("offset", 0)
             )
-            
+
         elif name == "get_customer":
             result = await orderdesk_service.get_customer_direct(
                 arguments["store_id"],
                 arguments["api_key"],
                 arguments["customer_id"]
             )
-            
+
         elif name == "list_folders":
             result = await orderdesk_service.list_folders_direct(
                 arguments["store_id"],
                 arguments["api_key"]
             )
-            
+
         elif name == "create_folder":
             result = await orderdesk_service.create_folder_direct(
                 arguments["store_id"],
@@ -539,13 +537,13 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 arguments["name"],
                 arguments.get("description")
             )
-            
+
         elif name == "list_webhooks":
             result = await orderdesk_service.list_webhooks_direct(
                 arguments["store_id"],
                 arguments["api_key"]
             )
-            
+
         elif name == "create_webhook":
             result = await orderdesk_service.create_webhook_direct(
                 arguments["store_id"],
@@ -554,7 +552,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 arguments["events"],
                 arguments.get("secret")
             )
-            
+
         elif name == "get_reports":
             result = await orderdesk_service.get_reports_direct(
                 arguments["store_id"],
@@ -563,13 +561,13 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 arguments.get("start_date"),
                 arguments.get("end_date")
             )
-            
+
         else:
             result = {"error": f"Unknown tool: {name}"}
-        
+
         # Return plain JSON string that Claude can parse
         return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
-        
+
     except Exception as e:
         logger.error(f"Error calling tool {name}: {str(e)}")
         return [types.TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False))]
@@ -578,7 +576,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
 async def main():
     """Main entry point for the MCP server."""
     logger.info("Starting OrderDesk MCP Server")
-    
+
     # Initialize database tables
     try:
         from mcp_server.models.database import create_tables
@@ -587,19 +585,18 @@ async def main():
     except Exception as e:
         logger.error(f"Failed to create database tables: {e}")
         raise
-    
+
     # Run the server using stdio transport
     async with stdio_server() as (read_stream, write_stream):
         # Create a simple notification options object with tools_changed attribute
-        from mcp import types
-        
+
         # Create a custom notification options object
         class CustomNotificationOptions:
             def __init__(self):
                 self.tools_changed = False
-        
+
         notification_options = CustomNotificationOptions()
-        
+
         await server.run(
             read_stream,
             write_stream,

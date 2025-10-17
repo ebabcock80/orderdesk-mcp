@@ -2,14 +2,12 @@
 
 import os
 import tempfile
-from typing import Generator
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from mcp_server.config import settings
 from mcp_server.main import app
 from mcp_server.models.database import Base, get_db
 
@@ -19,17 +17,17 @@ def test_db():
     """Create a test database."""
     # Create temporary database
     db_fd, db_path = tempfile.mkstemp()
-    
+
     # Override database URL
     test_db_url = f"sqlite:///{db_path}"
     engine = create_engine(test_db_url, connect_args={"check_same_thread": False})
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    
+
     # Create tables
     Base.metadata.create_all(bind=engine)
-    
+
     yield TestingSessionLocal
-    
+
     # Cleanup
     os.close(db_fd)
     os.unlink(db_path)
@@ -54,12 +52,12 @@ def client(test_db):
             yield db
         finally:
             db.close()
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
+
     with TestClient(app) as test_client:
         yield test_client
-    
+
     app.dependency_overrides.clear()
 
 

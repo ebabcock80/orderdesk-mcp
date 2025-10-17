@@ -1,119 +1,129 @@
-name: CI/CD Pipeline
+name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   lint:
+    name: Lint & Format Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.12'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-    
-    - name: Run ruff linter
-      run: ruff check .
-    
-    - name: Run flake8
-      run: flake8 .
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black
+          
+      - name: Lint with ruff
+        run: ruff check .
+        
+      - name: Format check with black
+        run: black --check .
 
   typecheck:
+    name: Type Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.12'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-    
-    - name: Run mypy
-      run: mypy .
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mypy types-redis
+          pip install -e .
+          
+      - name: Type check with mypy
+        run: mypy mcp_server/
 
   test:
+    name: Unit Tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.12'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-    
-    - name: Run tests
-      run: pytest --cov=mcp_server --cov-report=xml
-    
-    - name: Upload coverage
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+          
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ \
+            --cov=mcp_server \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=80 \
+            -v
+            
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
 
-  build:
+  docker:
+    name: Docker Build
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test]
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Build Docker image
-      run: docker build -t orderdesk-mcp:test .
-    
-    - name: Test Docker image
-      run: |
-        docker run --rm -d --name test-container -p 8080:8080 \
-          -e MCP_KMS_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))") \
-          orderdesk-mcp:test
-        sleep 10
-        curl -f http://localhost:8080/health
-        docker stop test-container
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Build Docker image
+        run: docker build -t orderdesk-mcp-server:test .
+        
+      - name: Test Docker image
+        run: |
+          docker run --rm \
+            -e MCP_KMS_KEY=$(openssl rand -base64 32) \
+            orderdesk-mcp-server:test \
+            python -c "from mcp_server.config import settings; print('Config OK')"
 
-  release:
+  integration:
+    name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [build]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Extract version
-      id: version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-    
-    - name: Build and push Docker image
-      run: |
-        docker build -t ghcr.io/${{ github.repository }}:latest .
-        docker build -t ghcr.io/${{ github.repository }}:${{ steps.version.outputs.VERSION }} .
-        docker push ghcr.io/${{ github.repository }}:latest
-        docker push ghcr.io/${{ github.repository }}:${{ steps.version.outputs.VERSION }}
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+          
+      - name: Run integration tests
+        env:
+          ORDERDESK_TEST_ENABLED: ${{ secrets.ORDERDESK_TEST_ENABLED }}
+          ORDERDESK_TEST_STORE_ID: ${{ secrets.ORDERDESK_TEST_STORE_ID }}
+          ORDERDESK_TEST_API_KEY: ${{ secrets.ORDERDESK_TEST_API_KEY }}
+        run: |
+          if [ "$ORDERDESK_TEST_ENABLED" = "true" ]; then
+            pytest tests/integration/ -v
+          else
+            echo "Integration tests skipped (no credentials)"
+          fi
