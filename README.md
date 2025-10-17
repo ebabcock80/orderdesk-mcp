@@ -1,404 +1,222 @@
-# OrderDesk MCP Multi-Tenant API Gateway
+# OrderDesk MCP Server
 
-A multi-tenant REST API gateway for OrderDesk with master key authentication, designed to work with or without Cloudflare. This server provides a secure, scalable way to manage multiple OrderDesk stores through a single API endpoint.
+A native Model Context Protocol (MCP) server for OrderDesk integration with AI assistants like Claude and LM Studio. This server provides direct access to OrderDesk APIs through MCP tools, enabling seamless order management, product catalog access, and customer data operations.
 
-## Features
+## 🚀 Features
 
-- **Multi-tenant Architecture**: Each master key represents a tenant with multiple OrderDesk stores
-- **Master Key Authentication**: Secure authentication using bearer tokens
-- **Full Order Mutation Workflow**: Fetch → Mutate → Full Update with concurrency safety
-- **Encrypted Storage**: Store API keys encrypted with per-tenant derived keys
-- **Multi-backend Caching**: Memory, SQLite, or Redis caching with TTL
-- **Proxy Support**: Works with Cloudflare Tunnel, reverse proxies, or direct deployment
-- **Structured Logging**: JSON logs with correlation IDs and request tracking
-- **Prometheus Metrics**: Built-in metrics endpoint for monitoring
+- **Native MCP Protocol**: Direct integration with Claude, LM Studio, and other MCP-compatible AI assistants
+- **Safe Order Updates**: Fetch → Merge → Update workflow prevents data loss
+- **Direct OrderDesk Integration**: Simplified architecture using store_id + api_key authentication
+- **Comprehensive API Coverage**: Orders, products, customers, folders, webhooks, and reports
+- **JSON Response Formatting**: Properly formatted responses for AI assistant parsing
 - **Docker Ready**: Multi-stage Docker build with health checks
+- **Persistent Storage**: SQLite database with volume mounting for data persistence
 
-## Quick Start
+## 🛠️ Available MCP Tools
 
-### Using Docker Compose
+The server provides the following MCP tools for AI assistant integration:
 
-1. **Clone and setup**:
+### Store Management
+- `create_store` - Add a new OrderDesk store with credentials
+- `list_stores` - List all configured stores
+- `delete_store` - Remove a store configuration
+
+### Order Operations
+- `list_orders` - Retrieve orders with filtering options
+- `get_order` - Get detailed order information
+- `create_order` - Create a new order
+- `update_order` - Update existing order (with safe merge)
+- `delete_order` - Remove an order
+- `mutate_order` - Safe order mutation workflow
+
+### Product Management
+- `list_products` - Browse product catalog
+- `get_product` - Get detailed product information
+
+### Customer Operations
+- `list_customers` - Retrieve customer list
+- `get_customer` - Get detailed customer information
+
+### Folder Management
+- `list_folders` - List order folders
+- `create_folder` - Create new folders
+
+### Webhooks & Reports
+- `list_webhooks` - View configured webhooks
+- `create_webhook` - Set up new webhooks
+- `get_reports` - Generate OrderDesk reports
+
+## 🚀 Quick Start
+
+### Running the MCP Server
+
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/ebabcock80/orderdesk-mcp.git
    cd orderdesk-mcp
    ```
 
-2. **Configure environment**:
+2. **Build the Docker image**:
    ```bash
-   cp .env.example .env
-   # Edit .env with your settings
+   docker build -t orderdesk-mcp:latest .
    ```
 
-3. **Generate encryption key**:
+3. **Run the MCP server**:
    ```bash
-   python -c "import secrets; print(secrets.token_urlsafe(32))"
-   # Add the output to MCP_KMS_KEY in .env
+   docker run --rm -i \
+     -v $(pwd)/data:/app/data \
+     -e SERVER_MODE=mcp \
+     -e MCP_KMS_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" \
+     -e DATABASE_URL="sqlite:///./data/app.db" \
+     -e LOG_LEVEL=info \
+     orderdesk-mcp:latest
    ```
 
-4. **Start the server**:
-   ```bash
-   docker-compose up -d
-   ```
+4. **Connect with AI Assistant**:
+   - Configure your AI assistant (Claude, LM Studio, etc.) to connect to the MCP server
+   - Use the available tools to interact with OrderDesk APIs
 
-5. **Verify health**:
-   ```bash
-   curl http://localhost:8080/health
-   ```
+## 🔧 Critical Features
 
-### Using Cloudflare Tunnel
+### Safe Order Updates
+The server implements a critical safety feature for order updates:
+1. **Fetch**: Retrieves the complete current order data
+2. **Merge**: Applies your changes to the existing data
+3. **Update**: Sends the complete updated order back to OrderDesk
 
-If you have an existing Cloudflare Tunnel configured:
+This prevents data loss that can occur with partial updates.
 
-```bash
-# Get container IP
-docker inspect orderdesk-mcp-mcp-1 | grep IPAddress
+### JSON Response Formatting
+All MCP tool responses are properly formatted as valid JSON that AI assistants can parse and understand, eliminating parsing errors.
 
-# Route traffic through tunnel
-cloudflared tunnel route ip <container_ip> <port>
-```
+### Direct OrderDesk Integration
+- Simplified authentication using `store_id` + `api_key`
+- No complex tenant management required
+- Direct access to all OrderDesk API endpoints
 
-## Architecture
+## 📋 Environment Variables
 
-### Multi-Tenancy Model
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `SERVER_MODE` | Server mode: `mcp` or `api` | `mcp` | No |
+| `MCP_KMS_KEY` | Base64-encoded encryption key (32+ bytes) | - | Yes |
+| `DATABASE_URL` | SQLite database URL | `sqlite:///./data/app.db` | No |
+| `LOG_LEVEL` | Logging level | `info` | No |
+| `TRUST_PROXY` | Trust proxy headers | `false` | No |
+| `AUTO_PROVISION_TENANT` | Auto-create tenants | `true` | No |
 
-- **Master Key**: Each tenant has a unique master key for authentication
-- **Stores**: Each tenant can register multiple OrderDesk stores
-- **Encryption**: API keys are encrypted using per-tenant derived keys
-- **Isolation**: Complete data isolation between tenants
+## 🏗️ Architecture
 
-### Full Order Update Workflow
+### MCP Server Implementation
+- **Native MCP Protocol**: Direct stdio communication with AI assistants
+- **Tool Registration**: All OrderDesk operations exposed as MCP tools
+- **Safe Updates**: Fetch-merge-update pattern for order modifications
+- **Error Handling**: Comprehensive error responses with proper JSON formatting
 
-OrderDesk requires complete order objects for updates. This server implements:
-
-1. **Fetch**: Retrieve current order from OrderDesk
-2. **Mutate**: Apply changes to a copy in memory
-3. **Update**: Upload the complete modified order object
-4. **Retry**: Handle concurrent updates with exponential backoff
-
-## API Reference
-
-### Authentication
-
-All requests require a master key in the Authorization header:
-
-```bash
-Authorization: Bearer <MASTER_KEY>
-```
+## 🔧 MCP Tool Examples
 
 ### Store Management
 
 #### Create Store
-```bash
-POST /stores
-Content-Type: application/json
-
+```json
 {
-  "store_id": "your-store-id",
-  "api_key": "your-api-key",
-  "label": "My Store"
+  "tool": "create_store",
+  "arguments": {
+    "store_id": "your-store-id",
+    "api_key": "your-api-key",
+    "name": "My Store"
+  }
 }
 ```
 
 #### List Stores
-```bash
-GET /stores
-```
-
-#### Delete Store
-```bash
-DELETE /stores/{store_id}
+```json
+{
+  "tool": "list_stores",
+  "arguments": {}
+}
 ```
 
 ### Order Operations
 
 #### List Orders
-```bash
-GET /stores/{store_id}/orders?limit=50&folder_id=123
-```
-
-#### Get Order
-```bash
-GET /stores/{store_id}/orders/{order_id}
-```
-
-#### Create Order
-```bash
-POST /stores/{store_id}/orders
-Content-Type: application/json
-
+```json
 {
-  "email": "customer@example.com",
-  "shipping": {
-    "first_name": "John",
-    "last_name": "Doe",
-    "address1": "123 Main St",
-    "city": "Anytown",
-    "state": "CA",
-    "postal_code": "12345",
-    "country": "US"
-  },
-  "items": [
-    {
-      "name": "Product Name",
-      "code": "PROD-001",
-      "price": 29.99,
-      "quantity": 1
-    }
-  ]
-}
-```
-
-#### Update Order (Full Object)
-```bash
-PUT /stores/{store_id}/orders/{order_id}
-Content-Type: application/json
-
-{
-  # Complete order object
-}
-```
-
-### Order Mutations
-
-#### Generic Mutation
-```bash
-POST /stores/{store_id}/orders/{order_id}:mutate
-Content-Type: application/json
-
-{
-  "operations": [
-    {
-      "op": "replace",
-      "path": "folder_id",
-      "value": 456
-    },
-    {
-      "op": "add",
-      "path": "notes",
-      "value": [{"note": "Updated by API", "type": "system"}]
-    }
-  ]
-}
-```
-
-#### Move to Folder
-```bash
-POST /stores/{store_id}/orders/{order_id}/move-folder
-Content-Type: application/json
-
-{
-  "folder_id": 456
-}
-```
-
-#### Add Items
-```bash
-POST /stores/{store_id}/orders/{order_id}/add-items
-Content-Type: application/json
-
-{
-  "items": [
-    {
-      "name": "Additional Product",
-      "code": "PROD-002",
-      "price": 19.99,
-      "quantity": 2
-    }
-  ]
-}
-```
-
-#### Update Address
-```bash
-POST /stores/{store_id}/orders/{order_id}/update-address
-Content-Type: application/json
-
-{
-  "address_type": "shipping",
-  "address": {
-    "first_name": "Jane",
-    "last_name": "Smith",
-    "address1": "456 Oak Ave",
-    "city": "Newtown",
-    "state": "NY",
-    "postal_code": "67890",
-    "country": "US"
+  "tool": "list_orders",
+  "arguments": {
+    "store_id": "your-store-id",
+    "api_key": "your-api-key",
+    "limit": 50,
+    "offset": 0,
+    "status": "pending",
+    "folder_id": 123
   }
 }
 ```
 
-#### Add Note
-```bash
-POST /stores/{store_id}/orders/{order_id}/add-note
-Content-Type: application/json
-
+#### Get Order
+```json
 {
-  "note": "Customer requested expedited shipping",
-  "note_type": "customer_service"
+  "tool": "get_order",
+  "arguments": {
+    "store_id": "your-store-id",
+    "api_key": "your-api-key",
+    "order_id": 12345
+  }
 }
 ```
 
-### Inventory Management
-
-#### List Inventory
-```bash
-GET /stores/{store_id}/inventory?limit=50&search=widget
-```
-
-#### Get Inventory Item
-```bash
-GET /stores/{store_id}/inventory/{item_id}
-```
-
-#### Create Inventory Item
-```bash
-POST /stores/{store_id}/inventory
-Content-Type: application/json
-
+#### Update Order (Safe)
+```json
 {
-  "name": "New Product",
-  "code": "PROD-003",
-  "price": 39.99,
-  "stock": 100
+  "tool": "update_order",
+  "arguments": {
+    "store_id": "your-store-id",
+    "api_key": "your-api-key",
+    "order_id": 12345,
+    "order_data": {
+      "status": "shipped",
+      "tracking_number": "1Z999AA1234567890"
+    }
+  }
 }
 ```
 
-#### Update Inventory Item
-```bash
-PUT /stores/{store_id}/inventory/{item_id}
-Content-Type: application/json
+## 🚀 Recent Updates
 
-{
-  "name": "Updated Product Name",
-  "price": 44.99,
-  "stock": 75
-}
-```
+### Critical Fixes (Latest Release)
+- ✅ **JSON Response Formatting**: Fixed Claude parsing errors with proper JSON formatting
+- ✅ **Safe Order Updates**: Implemented fetch-merge-update workflow to prevent data loss
+- ✅ **Simplified Architecture**: Removed tenant complexity, direct store_id + api_key authentication
+- ✅ **Native MCP Protocol**: Full MCP server implementation for AI assistant integration
 
-#### Delete Inventory Item
-```bash
-DELETE /stores/{store_id}/inventory/{item_id}
-```
+### Key Improvements
+- 🔧 **Error Handling**: Comprehensive error responses with proper JSON structure
+- 🔧 **Tool Registration**: All OrderDesk operations available as MCP tools
+- 🔧 **Database Persistence**: SQLite with volume mounting for data persistence
+- 🔧 **Docker Optimization**: Multi-stage build with proper caching
 
-## Configuration
+## 📚 Documentation
 
-### Environment Variables
+- **API Documentation**: Available at `/docs` when running in API mode
+- **MCP Tools**: All tools documented with proper schemas and examples
+- **Configuration**: Environment variables and setup instructions
+- **Docker**: Complete containerization with volume support
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | `8080` |
-| `TRUST_PROXY` | Trust proxy headers | `true` |
-| `LOG_LEVEL` | Logging level | `info` |
-| `MCP_KMS_KEY` | 32+ byte base64 encryption key | **Required** |
-| `AUTO_PROVISION_TENANT` | Auto-create tenants | `true` |
-| `RATE_LIMIT_RPM` | Rate limit per minute | `120` |
-| `CACHE_BACKEND` | Cache backend (memory/sqlite/redis) | `memory` |
-| `REDIS_URL` | Redis connection URL | `redis://redis:6379/0` |
-| `WEBHOOK_SECRET` | Webhook validation secret | Optional |
-| `ALLOWED_ORIGINS` | CORS allowed origins | Empty |
-| `DATABASE_URL` | Database connection URL | `sqlite:///data/app.db` |
+## 🤝 Contributing
 
-### Cache Configuration
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
 
-- **Memory**: Fast, but lost on restart
-- **SQLite**: Persistent, good for single instance
-- **Redis**: Distributed, good for multiple instances
-
-### TTL Settings
-
-- Orders: 15 seconds
-- Products: 60 seconds
-- Customers: 5 minutes
-- Store settings: 1 hour
-
-## Monitoring
-
-### Health Check
-```bash
-GET /health
-```
-
-### Metrics
-```bash
-GET /metrics
-```
-
-### Logs
-Structured JSON logs include:
-- Request/response details
-- Tenant and store IDs
-- Duration and status codes
-- Correlation IDs
-- Client IP addresses
-
-## Security
-
-- **Encryption**: All API keys encrypted with per-tenant derived keys
-- **Authentication**: Master key validation with Argon2 hashing
-- **Headers**: Security headers (HSTS, XSS protection, etc.)
-- **CORS**: Configurable origin restrictions
-- **Rate Limiting**: Built-in rate limiting
-- **Audit Logs**: All tenant actions logged
-
-## Development
-
-### Setup
-```bash
-# Install dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Run with hot reload
-uvicorn mcp_server.main:app --reload
-```
-
-### Testing
-```bash
-# Unit tests
-pytest tests/
-
-# Integration tests (requires test credentials)
-ORDERDESK_TEST_STORE_ID=xxx ORDERDESK_TEST_API_KEY=xxx pytest tests/test_integration.py
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Invalid KMS Key**: Ensure `MCP_KMS_KEY` is 32+ bytes base64 encoded
-2. **Database Permissions**: Ensure `/data` directory is writable
-3. **Proxy Headers**: Set `TRUST_PROXY=true` when behind a proxy
-4. **Rate Limiting**: Check OrderDesk API rate limits
-
-### Logs
-```bash
-# View logs
-docker-compose logs -f mcp
-
-# Check specific errors
-docker-compose logs mcp | grep ERROR
-```
-
-### Database
-```bash
-# Access database
-sqlite3 data/app.db
-
-# Check tenants
-SELECT id, created_at FROM tenants;
-
-# Check stores
-SELECT id, store_id, label FROM stores;
-```
-
-## License
+## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## Support
+## 🆘 Support
 
-- GitHub Issues: [https://github.com/ebabcock80/orderdesk-mcp/issues](https://github.com/ebabcock80/orderdesk-mcp/issues)
-- Documentation: [https://github.com/ebabcock80/orderdesk-mcp/tree/main/docs](https://github.com/ebabcock80/orderdesk-mcp/tree/main/docs)
+- **Issues**: [GitHub Issues](https://github.com/ebabcock80/orderdesk-mcp/issues)
+- **Documentation**: Check the `/docs` directory for detailed guides
+- **MCP Integration**: See tool schemas and examples above
