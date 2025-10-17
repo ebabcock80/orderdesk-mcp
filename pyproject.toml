@@ -9,7 +9,7 @@ description = "Multi-tenant REST API gateway for OrderDesk with master key authe
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-    {name = "Eric Babcock", email = "ebabcock80@gmail.com"},
+    {name = "Eric Babcock", email = "eric.babcock@gmail.com"},
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -28,11 +28,12 @@ dependencies = [
     "pydantic-settings>=2.1.0",
     "cryptography>=41.0.0",
     "sqlalchemy>=2.0.0",
-    "alembic>=1.13.0",
+    "argon2-cffi>=21.3.0",
     "redis>=5.0.0",
     "structlog>=23.2.0",
     "prometheus-client>=0.19.0",
     "passlib[bcrypt]>=1.7.4",
+    "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]

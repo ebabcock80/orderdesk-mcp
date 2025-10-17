@@ -1,1 +1,1 @@
-"""Service layer modules."""
+"""Services package for OrderDesk MCP server."""

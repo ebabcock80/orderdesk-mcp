@@ -37,6 +37,8 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY mcp_server/ ./mcp_server/
+# Force rebuild by adding timestamp
+RUN echo "Build timestamp: $(date)" > /app/build_info.txt
 
 # Create data directory and set permissions
 RUN mkdir -p /data && chown -R appuser:appuser /data /app
@@ -55,5 +57,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 ENV PYTHONPATH=/app
 ENV PORT=8080
 
-# Entry point
-ENTRYPOINT ["sh", "-c", "uvicorn mcp_server.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# Entry point - supports both FastAPI and MCP server modes
+ENTRYPOINT ["sh", "-c", "if [ \"$SERVER_MODE\" = \"mcp\" ]; then python -m mcp_server.mcp_server; else uvicorn mcp_server.main:app --host 0.0.0.0 --port ${PORT:-8080}; fi"]
