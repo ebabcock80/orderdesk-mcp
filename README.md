@@ -48,33 +48,98 @@ The server provides the following MCP tools for AI assistant integration:
 
 ## 🚀 Quick Start
 
-### Running the MCP Server
+### Prerequisites
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/ebabcock80/orderdesk-mcp.git
-   cd orderdesk-mcp
-   ```
+- **Docker**: Install Docker Desktop or Docker Engine
+- **OrderDesk Account**: Active OrderDesk account with API access
+- **AI Assistant**: Claude Desktop, LM Studio, or other MCP-compatible client
 
-2. **Build the Docker image**:
-   ```bash
-   docker build -t orderdesk-mcp:latest .
-   ```
+### Step 1: Clone and Build
 
-3. **Run the MCP server**:
-   ```bash
-   docker run --rm -i \
-     -v $(pwd)/data:/app/data \
-     -e SERVER_MODE=mcp \
-     -e MCP_KMS_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" \
-     -e DATABASE_URL="sqlite:///./data/app.db" \
-     -e LOG_LEVEL=info \
-     orderdesk-mcp:latest
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/ebabcock80/orderdesk-mcp.git
+cd orderdesk-mcp
 
-4. **Connect with AI Assistant**:
-   - Configure your AI assistant (Claude, LM Studio, etc.) to connect to the MCP server
-   - Use the available tools to interact with OrderDesk APIs
+# Build the Docker image
+docker build -t orderdesk-mcp:latest .
+```
+
+### Step 2: Generate Encryption Key
+
+```bash
+# Generate a secure encryption key
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+# Copy the output - you'll need this for MCP_KMS_KEY
+```
+
+### Step 3: Run the MCP Server
+
+```bash
+# Create data directory for persistent storage
+mkdir -p data
+
+# Run the MCP server with persistent data
+docker run --rm -i \
+  -v $(pwd)/data:/app/data \
+  -e SERVER_MODE=mcp \
+  -e MCP_KMS_KEY="YOUR_GENERATED_KEY_HERE" \
+  -e DATABASE_URL="sqlite:///./data/app.db" \
+  -e LOG_LEVEL=info \
+  orderdesk-mcp:latest
+```
+
+### Step 4: Configure Your AI Assistant
+
+#### For Claude Desktop
+Add to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "orderdesk": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "/path/to/your/data:/app/data",
+        "-e", "SERVER_MODE=mcp",
+        "-e", "MCP_KMS_KEY=YOUR_GENERATED_KEY_HERE",
+        "-e", "DATABASE_URL=sqlite:///./data/app.db",
+        "-e", "LOG_LEVEL=info",
+        "orderdesk-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+#### For LM Studio
+Create a configuration file:
+```json
+{
+  "mcpServers": {
+    "orderdesk": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "/path/to/your/data:/app/data",
+        "-e", "SERVER_MODE=mcp",
+        "-e", "MCP_KMS_KEY=YOUR_GENERATED_KEY_HERE",
+        "-e", "DATABASE_URL=sqlite:///./data/app.db",
+        "-e", "LOG_LEVEL=info",
+        "orderdesk-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+### Step 5: Test the Connection
+
+Once configured, your AI assistant should be able to use OrderDesk tools. Try asking:
+
+- "List my OrderDesk stores"
+- "Show me recent orders"
+- "Create a new order folder"
 
 ## 🔧 Critical Features
 
@@ -113,7 +178,75 @@ All MCP tool responses are properly formatted as valid JSON that AI assistants c
 - **Safe Updates**: Fetch-merge-update pattern for order modifications
 - **Error Handling**: Comprehensive error responses with proper JSON formatting
 
-## 🔧 MCP Tool Examples
+## 📖 Usage Guide
+
+### Getting Started with OrderDesk
+
+1. **First, add your OrderDesk store**:
+   ```
+   "Add my OrderDesk store with ID 42174 and API key abc123"
+   ```
+
+2. **List your stores to verify**:
+   ```
+   "Show me all my OrderDesk stores"
+   ```
+
+3. **Browse your orders**:
+   ```
+   "List my recent orders from OrderDesk"
+   "Show me pending orders"
+   "Get orders from folder 123"
+   ```
+
+### Common Use Cases
+
+#### Order Management
+```
+"Get details for order 12345"
+"Update order 12345 status to shipped with tracking number 1Z999AA1234567890"
+"Move order 12345 to the 'Shipped' folder"
+"Add a note to order 12345: 'Customer requested expedited shipping'"
+```
+
+#### Product Operations
+```
+"List all products in my store"
+"Search for products containing 'widget'"
+"Get details for product ID 5678"
+```
+
+#### Customer Management
+```
+"List all customers"
+"Search for customer 'john@example.com'"
+"Get customer details for ID 999"
+```
+
+#### Folder Organization
+```
+"List all order folders"
+"Create a new folder called 'Priority Orders'"
+"Move order 12345 to the 'Priority Orders' folder"
+```
+
+### Advanced Operations
+
+#### Safe Order Updates
+The server automatically handles safe order updates:
+- Fetches the complete current order data
+- Merges your changes with existing data
+- Sends the complete updated order back to OrderDesk
+- Prevents data loss from partial updates
+
+#### Batch Operations
+```
+"List the last 100 orders"
+"Show me all orders from the last 30 days"
+"Get all pending orders in folder 456"
+```
+
+## 🔧 MCP Tool Reference
 
 ### Store Management
 
@@ -215,8 +348,80 @@ All MCP tool responses are properly formatted as valid JSON that AI assistants c
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Docker Connection Problems
+```bash
+# Check if Docker is running
+docker --version
+
+# Verify the image was built correctly
+docker images | grep orderdesk-mcp
+
+# Check container logs
+docker logs <container_id>
+```
+
+#### MCP Server Not Starting
+```bash
+# Verify environment variables
+echo $MCP_KMS_KEY
+echo $DATABASE_URL
+
+# Check data directory permissions
+ls -la data/
+
+# Test with verbose logging
+docker run --rm -i \
+  -v $(pwd)/data:/app/data \
+  -e SERVER_MODE=mcp \
+  -e MCP_KMS_KEY="your-key" \
+  -e LOG_LEVEL=debug \
+  orderdesk-mcp:latest
+```
+
+#### OrderDesk API Errors
+- **401 Unauthorized**: Check your `store_id` and `api_key`
+- **404 Not Found**: Verify the endpoint exists in OrderDesk API v2
+- **500 Server Error**: Check OrderDesk service status
+
+#### Data Persistence Issues
+```bash
+# Ensure data directory exists and is writable
+mkdir -p data
+chmod 755 data
+
+# Check database file
+ls -la data/app.db
+```
+
+### Getting Help
+
+1. **Check the logs**: Look for error messages in the Docker container logs
+2. **Verify configuration**: Ensure all environment variables are set correctly
+3. **Test connectivity**: Try a simple tool call like `health_check`
+4. **Check OrderDesk**: Verify your OrderDesk account and API credentials
+
 ## 🆘 Support
 
 - **Issues**: [GitHub Issues](https://github.com/ebabcock80/orderdesk-mcp/issues)
-- **Documentation**: Check the `/docs` directory for detailed guides
+- **Documentation**: This README and inline code comments
 - **MCP Integration**: See tool schemas and examples above
+- **OrderDesk API**: [OrderDesk API Documentation](https://app.orderdesk.me/api-docs)
+
+### Contributing
+
+Found a bug or want to add a feature? We welcome contributions!
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes and test them
+4. Commit your changes: `git commit -m 'Add amazing feature'`
+5. Push to the branch: `git push origin feature/amazing-feature`
+6. Open a Pull Request
+
+### License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
