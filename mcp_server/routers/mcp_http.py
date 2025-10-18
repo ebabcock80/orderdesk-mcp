@@ -82,6 +82,14 @@ async def mcp_http_endpoint(
             result = await handle_list_tools(tenant, db)
         elif mcp_request.method == "tools/call":
             result = await handle_call_tool(mcp_request.params or {}, tenant, db)
+        elif mcp_request.method == "prompts/list":
+            result = {"prompts": []}  # No prompts supported yet
+        elif mcp_request.method == "resources/list":
+            result = {"resources": []}  # No resources supported yet
+        elif mcp_request.method.startswith("notifications/"):
+            # Client notifications don't need responses
+            logger.info("Received notification", method=mcp_request.method)
+            return {"jsonrpc": "2.0"}
         else:
             return {
                 "jsonrpc": "2.0",
@@ -122,6 +130,8 @@ async def handle_initialize(
         "protocolVersion": "2024-11-05",
         "capabilities": {
             "tools": {},
+            "prompts": {},
+            "resources": {},
         },
         "serverInfo": {
             "name": "OrderDesk",
