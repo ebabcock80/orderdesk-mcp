@@ -65,6 +65,15 @@ class Tenant(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     master_key_hash = Column(String(255), nullable=False)  # bcrypt hash
     salt = Column(String(255), nullable=False)  # Random salt for HKDF
+    
+    # Phase 6: Optional email for public signup
+    email = Column(String(255), nullable=True, unique=True)  # Optional, for signup
+    email_verified = Column(Boolean, default=False, nullable=False)
+    
+    # Activity tracking for user management
+    last_login = Column(DateTime, nullable=True)
+    last_activity = Column(DateTime, nullable=True)
+    
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     updated_at = Column(
         DateTime,
@@ -73,7 +82,10 @@ class Tenant(Base):
         nullable=True,
     )
 
-    __table_args__ = (Index("idx_tenants_master_key_hash", "master_key_hash"),)
+    __table_args__ = (
+        Index("idx_tenants_master_key_hash", "master_key_hash"),
+        Index("idx_tenants_email", "email"),
+    )
 
 
 class Store(Base):

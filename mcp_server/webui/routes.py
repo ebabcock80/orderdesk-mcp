@@ -1,5 +1,7 @@
 """WebUI routes for OrderDesk MCP Server admin interface."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -8,6 +10,7 @@ from sqlalchemy.orm import Session
 from mcp_server.config import settings
 from mcp_server.models.database import get_db
 from mcp_server.services.store import StoreService
+from mcp_server.services.user import UserService
 from mcp_server.utils.logging import logger
 from mcp_server.webui.auth import (
     auth_manager,
@@ -82,6 +85,10 @@ async def login(
 
     # Create session token
     session_token = auth_manager.create_session_token(tenant_id)
+
+    # Update last_login timestamp (Phase 6)
+    user_service = UserService(db)
+    await user_service.update_last_login(tenant_id)
 
     # Create response with session cookie
     response = RedirectResponse(url="/webui/dashboard", status_code=303)
@@ -846,6 +853,142 @@ async def settings_page(
             "csrf_token": generate_csrf_token(),
         },
     )
+
+
+# ============================================================================
+# User Management Routes (Phase 6)
+# ============================================================================
+
+
+@router.get("/users", response_class=HTMLResponse)
+async def user_list_page(
+    request: Request,
+    search: str | None = None,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Display user management page (master key holders only).
+
+    Args:
+        request: FastAPI request
+        search: Optional search query (by email)
+        user: Current authenticated user
+        db: Database session
+
+    Returns:
+        User management HTML page
+    """
+    user_service = UserService(db)
+
+    # Get all users
+    users = await user_service.list_users(limit=100, search=search)
+
+    # Calculate statistics
+    total_stores = sum(u["store_count"] for u in users)
+    active_today = sum(
+        1
+        for u in users
+        if u["last_activity"]
+        and (datetime.now(timezone.utc) - u["last_activity"]).days == 0
+    )
+
+    return get_templates().TemplateResponse(
+        "users/list.html",
+        {
+            "request": request,
+            "user": user,
+            "users": users,
+            "total_stores": total_stores,
+            "active_today": active_today,
+            "search": search,
+            "current_user_id": user["id"],
+            "csrf_token": generate_csrf_token(),
+        },
+    )
+
+
+@router.get("/users/{user_id}", response_class=HTMLResponse)
+async def user_details_page(
+    request: Request,
+    user_id: str,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Display user details page.
+
+    Args:
+        request: FastAPI request
+        user_id: User/tenant ID
+        user: Current authenticated user
+        db: Database session
+
+    Returns:
+        User details HTML page
+    """
+    user_service = UserService(db)
+    user_details = await user_service.get_user(user_id)
+
+    if not user_details:
+        return get_templates().TemplateResponse(
+            "404.html",
+            {"request": request, "message": "User not found"},
+            status_code=404,
+        )
+
+    return get_templates().TemplateResponse(
+        "users/details.html",
+        {
+            "request": request,
+            "user": user,
+            "user": user_details,
+            "current_user_id": user["id"],
+            "now": datetime.now(timezone.utc),
+            "csrf_token": generate_csrf_token(),
+        },
+    )
+
+
+@router.post("/users/{user_id}/delete")
+async def delete_user(
+    request: Request,
+    user_id: str,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Delete user and all their data (cascade delete).
+
+    Args:
+        request: FastAPI request
+        user_id: User/tenant ID to delete
+        user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Redirect to user list
+    """
+    # Prevent self-deletion
+    if user_id == user["id"]:
+        logger.warning("User attempted to delete themselves", user_id=user_id)
+        return RedirectResponse(
+            url=f"/webui/users/{user_id}?error=cannot_delete_self",
+            status_code=303,
+        )
+
+    user_service = UserService(db)
+    success = await user_service.delete_user(user_id, deleted_by=user["id"])
+
+    if success:
+        logger.info("User deleted via WebUI", user_id=user_id, deleted_by=user["id"])
+        return RedirectResponse(url="/webui/users?success=user_deleted", status_code=303)
+    else:
+        logger.warning("User deletion failed - not found", user_id=user_id)
+        return RedirectResponse(
+            url=f"/webui/users?error=user_not_found",
+            status_code=303,
+        )
 
 
 # Add root redirect

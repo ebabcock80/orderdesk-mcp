@@ -32,6 +32,7 @@
                             <div class="ml-10 flex items-baseline space-x-4">
                                 <a href="/webui/dashboard" class="{% if request.url.path == '/webui/dashboard' %}bg-indigo-700 text-white{% else %}text-white hover:bg-indigo-500 hover:bg-opacity-75{% endif %} rounded-md px-3 py-2 text-sm font-medium">Dashboard</a>
                                 <a href="/webui/stores" class="{% if '/stores' in request.url.path %}bg-indigo-700 text-white{% else %}text-white hover:bg-indigo-500 hover:bg-opacity-75{% endif %} rounded-md px-3 py-2 text-sm font-medium">Stores</a>
+                                <a href="/webui/users" class="{% if '/users' in request.url.path %}bg-indigo-700 text-white{% else %}text-white hover:bg-indigo-500 hover:bg-opacity-75{% endif %} rounded-md px-3 py-2 text-sm font-medium">Users</a>
                                 <a href="/webui/console" class="{% if request.url.path == '/webui/console' %}bg-indigo-700 text-white{% else %}text-white hover:bg-indigo-500 hover:bg-opacity-75{% endif %} rounded-md px-3 py-2 text-sm font-medium">API Console</a>
                                 <a href="/webui/settings" class="{% if request.url.path == '/webui/settings' %}bg-indigo-700 text-white{% else %}text-white hover:bg-indigo-500 hover:bg-opacity-75{% endif %} rounded-md px-3 py-2 text-sm font-medium">Settings</a>
                             </div>
