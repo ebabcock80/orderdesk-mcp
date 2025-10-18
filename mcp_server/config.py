@@ -95,9 +95,6 @@ class Settings(BaseSettings):
     enable_webui: bool = Field(
         default=False, description="Enable optional web interface"
     )
-    enable_public_signup: bool = Field(
-        default=False, description="Allow public user registration"
-    )
 
     # WebUI Authentication
     jwt_secret_key: str | None = Field(
@@ -105,9 +102,6 @@ class Settings(BaseSettings):
     )
     session_timeout: int = Field(
         default=86400, description="Session timeout in seconds (24 hours)"
-    )
-    magic_link_expiry: int = Field(
-        default=900, description="Magic link expiry in seconds (15 minutes)"
     )
 
     # Session Cookie Configuration
@@ -123,19 +117,6 @@ class Settings(BaseSettings):
     session_cookie_samesite: str = Field(
         default="Strict", description="SameSite cookie attribute"
     )
-
-    # Email Configuration
-    require_email_verification: bool = Field(
-        default=False, description="Require email verification on signup"
-    )
-    smtp_host: str | None = Field(default=None, description="SMTP server host")
-    smtp_port: int = Field(default=587, description="SMTP server port")
-    smtp_user: str | None = Field(default=None, description="SMTP username")
-    smtp_password: str | None = Field(default=None, description="SMTP password")
-    smtp_from: str = Field(
-        default="OrderDesk MCP <noreply@example.com>", description="From email address"
-    )
-    smtp_tls: bool = Field(default=True, description="Use TLS for SMTP")
 
     # WebUI Rate Limiting
     webui_rate_limit_login: int = Field(
@@ -171,7 +152,7 @@ class Settings(BaseSettings):
     require_email_verification: bool = Field(
         default=True, description="Require email verification for signup"
     )
-    
+
     # SMTP Settings
     smtp_host: str | None = Field(default=None, description="SMTP server hostname")
     smtp_port: int = Field(default=587, description="SMTP server port")
@@ -181,13 +162,13 @@ class Settings(BaseSettings):
     smtp_from_email: str | None = Field(
         default=None, description="Default sender email address"
     )
-    
+
     # Email Provider
     email_provider: str = Field(
         default="console",
         description="Email provider (smtp, console)",
     )
-    
+
     # Signup Rate Limiting
     signup_rate_limit_per_hour: int = Field(
         default=3, description="Max signups per IP per hour"

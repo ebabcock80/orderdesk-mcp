@@ -1,7 +1,8 @@
 """Tests for email service and magic links."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timedelta, timezone
 
 from mcp_server.email.magic_link import MagicLinkService
 from mcp_server.email.providers import ConsoleEmailProvider, SMTPEmailProvider
@@ -181,7 +182,7 @@ class TestMagicLinkService:
         assert magic_link.used is False
         assert magic_link.ip_address == "127.0.0.1"
         # Use naive datetime for comparison (SQLite stores naive)
-        assert magic_link.expires_at > datetime.now(timezone.utc).replace(tzinfo=None)
+        assert magic_link.expires_at > datetime.now(UTC).replace(tzinfo=None)
 
     def test_verify_magic_link_success(self, db_session):
         """Test verifying a valid magic link."""
@@ -252,7 +253,9 @@ class TestMagicLinkService:
             .filter(MagicLink.token_hash == token_hash)
             .first()
         )
-        magic_link.expires_at = (datetime.now(timezone.utc) - timedelta(seconds=10)).replace(tzinfo=None)
+        magic_link.expires_at = (datetime.now(UTC) - timedelta(seconds=10)).replace(
+            tzinfo=None
+        )
         db_session.commit()
 
         # Try to verify
@@ -320,18 +323,22 @@ class TestMagicLinkService:
             .filter(MagicLink.token_hash == token_hash1)
             .first()
         )
-        magic_link1.expires_at = (datetime.now(timezone.utc) - timedelta(seconds=10)).replace(tzinfo=None)
+        magic_link1.expires_at = (datetime.now(UTC) - timedelta(seconds=10)).replace(
+            tzinfo=None
+        )
         db_session.commit()
 
         # Cleanup - should only delete the manually expired link
-        count = service.cleanup_expired_links()
+        service.cleanup_expired_links()
 
         # Expecting to cleanup the one expired link (plus maybe old test data)
         # Get remaining links for our specific test
-        remaining_test_links = db_session.query(MagicLink).filter(
-            MagicLink.token_hash.in_([token_hash1, token_hash2])
-        ).all()
-        
+        remaining_test_links = (
+            db_session.query(MagicLink)
+            .filter(MagicLink.token_hash.in_([token_hash1, token_hash2]))
+            .all()
+        )
+
         # Should only have the valid link remaining
         assert len(remaining_test_links) == 1
         assert remaining_test_links[0].token_hash == token_hash2
@@ -342,6 +349,7 @@ class TestMagicLinkService:
 
         # Use unique email to avoid test isolation issues
         import uuid
+
         email = f"test-{uuid.uuid4()}@example.com"
 
         # Initially no links
@@ -356,4 +364,3 @@ class TestMagicLinkService:
 
         # Different purpose should not count
         assert service.get_active_link_count(email, "password_reset") == 0
-

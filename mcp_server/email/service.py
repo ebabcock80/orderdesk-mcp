@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
@@ -51,7 +50,9 @@ class EmailProvider(ABC):
 class EmailService:
     """Email service for sending emails via various providers."""
 
-    def __init__(self, provider: EmailProvider | None = None, template_dir: str | None = None):
+    def __init__(
+        self, provider: EmailProvider | None = None, template_dir: str | None = None
+    ):
         """
         Initialize email service.
 
@@ -61,7 +62,7 @@ class EmailService:
         """
         self.provider = provider
         self.template_dir = template_dir or "mcp_server/email/templates"
-        
+
         # Initialize Jinja2 template environment
         self.template_env = Environment(
             loader=FileSystemLoader(self.template_dir),
@@ -124,9 +125,19 @@ class EmailService:
             success = await self.provider.send_email(message)
 
             if success:
-                logger.info("Email sent successfully", to=to, subject=subject, template=template_name)
+                logger.info(
+                    "Email sent successfully",
+                    to=to,
+                    subject=subject,
+                    template=template_name,
+                )
             else:
-                logger.error("Email sending failed", to=to, subject=subject, template=template_name)
+                logger.error(
+                    "Email sending failed",
+                    to=to,
+                    subject=subject,
+                    template=template_name,
+                )
 
             return success
 
@@ -200,4 +211,3 @@ class EmailService:
     def is_enabled(self) -> bool:
         """Check if email service is enabled and configured."""
         return self.provider is not None
-

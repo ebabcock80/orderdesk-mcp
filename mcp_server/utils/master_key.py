@@ -52,4 +52,3 @@ def validate_master_key_strength(master_key: str) -> tuple[bool, str | None]:
         return False, "Master key contains invalid characters"
 
     return True, None
-

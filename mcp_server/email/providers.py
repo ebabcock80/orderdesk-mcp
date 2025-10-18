@@ -52,7 +52,7 @@ class SMTPEmailProvider(EmailProvider):
             # Create message
             msg = MIMEMultipart("alternative")
             msg["Subject"] = message.subject
-            msg["From"] = message.from_email or self.from_email
+            msg["From"] = message.from_email or self.from_email or "noreply@localhost"
             msg["To"] = message.to
 
             # Add text part (if available)
@@ -159,4 +159,3 @@ class ConsoleEmailProvider(EmailProvider):
     async def is_configured(self) -> bool:
         """Console provider is always configured."""
         return True
-

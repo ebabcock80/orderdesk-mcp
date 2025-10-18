@@ -20,8 +20,8 @@
             <div class="flex items-center">
                 <div class="flex-shrink-0 h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
                     <span class="text-blue-600 font-bold text-2xl">
-                        {% if user.email %}
-                            {{ user.email[0].upper() }}
+                        {% if target_user.email %}
+                            {{ target_user.email[0].upper() }}
                         {% else %}
                             U
                         {% endif %}
@@ -29,15 +29,15 @@
                 </div>
                 <div class="ml-6">
                     <h1 class="text-2xl font-bold text-gray-900">
-                        {% if user.email %}
-                            {{ user.email }}
+                        {% if target_user.email %}
+                            {{ target_user.email }}
                         {% else %}
-                            User {{ user.id[:8] }}
+                            User {{ target_user.id[:8] }}
                         {% endif %}
                     </h1>
                     <p class="text-gray-500 text-sm mt-1">
-                        ID: {{ user.id }}
-                        {% if user.email_verified %}
+                        ID: {{ target_user.id }}
+                        {% if target_user.email_verified %}
                             <span class="ml-2 inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
                                 ✓ Email Verified
                             </span>
@@ -46,8 +46,8 @@
                 </div>
             </div>
             
-            {% if user.id != current_user_id %}
-            <form method="POST" action="/webui/users/{{ user.id }}/delete" onsubmit="return confirm('⚠️ DELETE USER AND ALL DATA?\n\nThis will permanently delete:\n- User account\n- {{ user.store_count }} stores\n- {{ user.audit_log_count }} audit log entries\n- {{ user.session_count }} sessions\n\nThis action CANNOT be undone!\n\nType DELETE to confirm:') && prompt('Type DELETE to confirm:') === 'DELETE';">
+            {% if target_user.id != current_user_id %}
+            <form method="POST" action="/webui/users/{{ target_user.id }}/delete" onsubmit="return confirm('⚠️ DELETE USER AND ALL DATA?\n\nThis will permanently delete:\n- User account\n- {{ target_user.store_count }} stores\n- {{ target_user.audit_log_count }} audit log entries\n- {{ target_user.session_count }} sessions\n\nThis action CANNOT be undone!\n\nType DELETE to confirm:') && prompt('Type DELETE to confirm:') === 'DELETE';">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button
                     type="submit"
@@ -72,20 +72,20 @@
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-6 mb-6">
         <div class="bg-white rounded-lg shadow p-6">
             <div class="text-sm text-gray-600 mb-1">Stores</div>
-            <div class="text-3xl font-bold text-gray-900">{{ user.store_count }}</div>
+            <div class="text-3xl font-bold text-gray-900">{{ target_user.store_count }}</div>
         </div>
         <div class="bg-white rounded-lg shadow p-6">
             <div class="text-sm text-gray-600 mb-1">Audit Logs</div>
-            <div class="text-3xl font-bold text-gray-900">{{ user.audit_log_count }}</div>
+            <div class="text-3xl font-bold text-gray-900">{{ target_user.audit_log_count }}</div>
         </div>
         <div class="bg-white rounded-lg shadow p-6">
             <div class="text-sm text-gray-600 mb-1">Sessions</div>
-            <div class="text-3xl font-bold text-gray-900">{{ user.session_count }}</div>
+            <div class="text-3xl font-bold text-gray-900">{{ target_user.session_count }}</div>
         </div>
         <div class="bg-white rounded-lg shadow p-6">
             <div class="text-sm text-gray-600 mb-1">Account Age</div>
             <div class="text-3xl font-bold text-gray-900">
-                {{ ((now - user.created_at).days) }} d
+                {{ ((now - target_user.created_at).days) }} d
             </div>
         </div>
     </div>
@@ -99,8 +99,8 @@
                 <div class="ml-4">
                     <p class="text-sm text-gray-900">Last Login</p>
                     <p class="text-sm text-gray-500">
-                        {% if user.last_login %}
-                            {{ user.last_login.strftime('%Y-%m-%d %H:%M:%S UTC') }}
+                        {% if target_user.last_login %}
+                            {{ target_user.last_login.strftime('%Y-%m-%d %H:%M:%S UTC') }}
                         {% else %}
                             Never
                         {% endif %}
@@ -112,8 +112,8 @@
                 <div class="ml-4">
                     <p class="text-sm text-gray-900">Last Activity</p>
                     <p class="text-sm text-gray-500">
-                        {% if user.last_activity %}
-                            {{ user.last_activity.strftime('%Y-%m-%d %H:%M:%S UTC') }}
+                        {% if target_user.last_activity %}
+                            {{ target_user.last_activity.strftime('%Y-%m-%d %H:%M:%S UTC') }}
                         {% else %}
                             Never
                         {% endif %}
@@ -125,17 +125,17 @@
                 <div class="ml-4">
                     <p class="text-sm text-gray-900">Account Created</p>
                     <p class="text-sm text-gray-500">
-                        {{ user.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}
+                        {{ target_user.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}
                     </p>
                 </div>
             </div>
-            {% if user.updated_at %}
+            {% if target_user.updated_at %}
             <div class="flex items-center">
                 <div class="flex-shrink-0 w-2 h-2 bg-yellow-500 rounded-full"></div>
                 <div class="ml-4">
                     <p class="text-sm text-gray-900">Last Updated</p>
                     <p class="text-sm text-gray-500">
-                        {{ user.updated_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}
+                        {{ target_user.updated_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}
                     </p>
                 </div>
             </div>
@@ -146,10 +146,10 @@
     <!-- User's Stores -->
     <div class="bg-white rounded-lg shadow p-6">
         <h2 class="text-lg font-semibold text-gray-900 mb-4">
-            Stores ({{ user.store_count }})
+            Stores ({{ target_user.store_count }})
         </h2>
         
-        {% if user.stores %}
+        {% if target_user.stores %}
         <div class="overflow-hidden">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
@@ -169,7 +169,7 @@
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
-                    {% for store in user.stores %}
+                    {% for store in target_user.stores %}
                     <tr class="hover:bg-gray-50">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="text-sm font-medium text-gray-900">{{ store.name }}</div>
@@ -202,7 +202,7 @@
     </div>
 
     <!-- Warning Box -->
-    {% if user.id != current_user_id %}
+    {% if target_user.id != current_user_id %}
     <div class="mt-6 bg-red-50 border-l-4 border-red-400 p-4">
         <div class="flex">
             <div class="flex-shrink-0">
@@ -216,9 +216,9 @@
                     <p>Deleting this user will permanently remove:</p>
                     <ul class="list-disc list-inside mt-1">
                         <li>User account and master key</li>
-                        <li>{{ user.store_count }} store registration(s)</li>
-                        <li>{{ user.audit_log_count }} audit log entries</li>
-                        <li>{{ user.session_count }} active session(s)</li>
+                        <li>{{ target_user.store_count }} store registration(s)</li>
+                        <li>{{ target_user.audit_log_count }} audit log entries</li>
+                        <li>{{ target_user.session_count }} active session(s)</li>
                     </ul>
                     <p class="mt-2 font-semibold">This action cannot be undone!</p>
                 </div>

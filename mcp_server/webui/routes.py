@@ -1,23 +1,23 @@
 """WebUI routes for OrderDesk MCP Server admin interface."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from mcp_server.auth.crypto import hash_master_key
 from mcp_server.config import settings
+from mcp_server.email import EmailService
+from mcp_server.email.magic_link import MagicLinkService
+from mcp_server.email.providers import ConsoleEmailProvider, SMTPEmailProvider
 from mcp_server.models.database import get_db
+from mcp_server.services.rate_limit import RateLimitService
 from mcp_server.services.store import StoreService
 from mcp_server.services.user import UserService
-from mcp_server.services.rate_limit import RateLimitService
-from mcp_server.email import EmailService
-from mcp_server.email.providers import ConsoleEmailProvider, SMTPEmailProvider
-from mcp_server.email.magic_link import MagicLinkService
-from mcp_server.utils.master_key import generate_master_key
-from mcp_server.auth.crypto import hash_master_key
 from mcp_server.utils.logging import logger
+from mcp_server.utils.master_key import generate_master_key
 from mcp_server.webui.auth import (
     auth_manager,
     create_session_cookie,
@@ -896,8 +896,7 @@ async def user_list_page(
     active_today = sum(
         1
         for u in users
-        if u["last_activity"]
-        and (datetime.now(timezone.utc) - u["last_activity"]).days == 0
+        if u["last_activity"] and (datetime.now(UTC) - u["last_activity"]).days == 0
     )
 
     return get_templates().TemplateResponse(
@@ -949,9 +948,9 @@ async def user_details_page(
         {
             "request": request,
             "user": user,
-            "user": user_details,
+            "target_user": user_details,
             "current_user_id": user["id"],
-            "now": datetime.now(timezone.utc),
+            "now": datetime.now(UTC),
             "csrf_token": generate_csrf_token(),
         },
     )
@@ -989,11 +988,13 @@ async def delete_user(
 
     if success:
         logger.info("User deleted via WebUI", user_id=user_id, deleted_by=user["id"])
-        return RedirectResponse(url="/webui/users?success=user_deleted", status_code=303)
+        return RedirectResponse(
+            url="/webui/users?success=user_deleted", status_code=303
+        )
     else:
         logger.warning("User deletion failed - not found", user_id=user_id)
         return RedirectResponse(
-            url=f"/webui/users?error=user_not_found",
+            url="/webui/users?error=user_not_found",
             status_code=303,
         )
 
@@ -1097,13 +1098,12 @@ async def signup(
     )
 
     if not is_allowed:
-        reset_time = rate_limit_service.get_rate_limit_reset_time(client_host)
         return get_templates().TemplateResponse(
             "signup/form.html",
             {
                 "request": request,
                 "csrf_token": generate_csrf_token(),
-                "error": f"Rate limit exceeded. Too many signup attempts. Please try again later.",
+                "error": "Rate limit exceeded. Too many signup attempts. Please try again later.",
                 "email": email,
             },
             status_code=429,
@@ -1229,7 +1229,9 @@ async def verify_email(
     existing = db.query(Tenant).filter(Tenant.email == email).first()
     if existing:
         logger.warning("User already exists during verification", email=email)
-        return RedirectResponse(url="/webui/login?error=already_exists", status_code=303)
+        return RedirectResponse(
+            url="/webui/login?error=already_exists", status_code=303
+        )
 
     # Generate master key
     master_key = generate_master_key(length=48)  # 64-char URL-safe string

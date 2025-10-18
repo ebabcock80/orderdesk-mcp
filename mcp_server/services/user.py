@@ -1,12 +1,12 @@
 """User management service for Phase 6."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
-from mcp_server.models.database import AuditLog, MagicLink, Session as SessionModel
-from mcp_server.models.database import Store, Tenant
+from mcp_server.models.database import AuditLog, MagicLink, Store, Tenant
+from mcp_server.models.database import Session as SessionModel
 from mcp_server.utils.logging import logger
 
 
@@ -16,7 +16,9 @@ class UserService:
     def __init__(self, db: Session):
         self.db = db
 
-    async def list_users(self, limit: int = 100, offset: int = 0, search: str | None = None):
+    async def list_users(
+        self, limit: int = 100, offset: int = 0, search: str | None = None
+    ):
         """
         List all users with statistics.
 
@@ -134,7 +136,9 @@ class UserService:
 
         # Get counts for logging
         store_count = (
-            self.db.query(func.count(Store.id)).filter(Store.tenant_id == user_id).scalar()
+            self.db.query(func.count(Store.id))
+            .filter(Store.tenant_id == user_id)
+            .scalar()
         )
         audit_count = (
             self.db.query(func.count(AuditLog.id))
@@ -193,8 +197,8 @@ class UserService:
         """
         user = self.db.query(Tenant).filter(Tenant.id == user_id).first()
         if user:
-            user.last_login = datetime.now(timezone.utc)
-            user.last_activity = datetime.now(timezone.utc)
+            user.last_login = datetime.now(UTC)  # type: ignore[assignment]
+            user.last_activity = datetime.now(UTC)  # type: ignore[assignment]
             self.db.commit()
 
     async def update_last_activity(self, user_id: str) -> None:
@@ -206,10 +210,9 @@ class UserService:
         """
         user = self.db.query(Tenant).filter(Tenant.id == user_id).first()
         if user:
-            user.last_activity = datetime.now(timezone.utc)
+            user.last_activity = datetime.now(UTC)  # type: ignore[assignment]
             self.db.commit()
 
     async def get_user_count(self) -> int:
         """Get total number of users."""
         return self.db.query(func.count(Tenant.id)).scalar()
-

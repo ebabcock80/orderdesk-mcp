@@ -1,6 +1,6 @@
 """Rate limiting service for signup and other operations."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
@@ -33,7 +33,7 @@ class RateLimitService:
             - remaining_attempts: Number of signup attempts remaining
         """
         # Count signup attempts in the last hour (use naive datetime for SQLite)
-        one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
+        one_hour_ago = (datetime.now(UTC) - timedelta(hours=1)).replace(tzinfo=None)
 
         count = (
             self.db.query(MagicLink)
@@ -74,7 +74,7 @@ class RateLimitService:
             Datetime when rate limit resets, or None if no limit active
         """
         # Find oldest magic link in the last hour (use naive datetime for SQLite)
-        one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
+        one_hour_ago = (datetime.now(UTC) - timedelta(hours=1)).replace(tzinfo=None)
 
         oldest = (
             self.db.query(MagicLink)
@@ -91,6 +91,8 @@ class RateLimitService:
 
         if oldest:
             # Rate limit resets 1 hour after oldest attempt
-            return oldest.created_at + timedelta(hours=1)
+            # Cast to datetime to satisfy mypy
+            created_time: datetime = oldest.created_at  # type: ignore[assignment]
+            return created_time + timedelta(hours=1)
 
         return None

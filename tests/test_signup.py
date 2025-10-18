@@ -1,11 +1,15 @@
 """Tests for public signup flow (Phase 6 - Sprint 3)."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timedelta, timezone
 
 from mcp_server.models.database import MagicLink, Tenant
 from mcp_server.services.rate_limit import RateLimitService
-from mcp_server.utils.master_key import generate_master_key, validate_master_key_strength
+from mcp_server.utils.master_key import (
+    generate_master_key,
+    validate_master_key_strength,
+)
 
 
 class TestMasterKeyGeneration:
@@ -85,7 +89,7 @@ class TestRateLimitService:
             purpose="email_verification",
             ip_address="192.168.1.1",
             used=False,
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
+            expires_at=datetime.now(UTC) + timedelta(minutes=15),
         )
         db_session.add(magic_link)
         db_session.commit()
@@ -111,7 +115,7 @@ class TestRateLimitService:
                 purpose="email_verification",
                 ip_address="192.168.1.1",
                 used=False,
-                expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
+                expires_at=datetime.now(UTC) + timedelta(minutes=15),
             )
             db_session.add(magic_link)
         db_session.commit()
@@ -130,9 +134,10 @@ class TestRateLimitService:
 
         # Use unique IP to avoid test isolation issues
         import uuid
+
         unique_id = str(uuid.uuid4())
         unique_ip = f"10.0.0.{uuid.uuid4().hex[:3]}"
-        
+
         # Create expired magic link (created 2 hours ago)
         magic_link = MagicLink(
             email="test@example.com",
@@ -141,8 +146,9 @@ class TestRateLimitService:
             purpose="email_verification",
             ip_address=unique_ip,
             used=False,
-            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15),
-            created_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2),  # 2 hours ago
+            expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=15),
+            created_at=datetime.now(UTC).replace(tzinfo=None)
+            - timedelta(hours=2),  # 2 hours ago
         )
         db_session.add(magic_link)
         db_session.commit()
@@ -162,6 +168,7 @@ class TestRateLimitService:
 
         # Create 3 magic links for IP1 (use unique tokens)
         import uuid
+
         for i in range(3):
             unique_id = str(uuid.uuid4())
             magic_link = MagicLink(
@@ -171,7 +178,8 @@ class TestRateLimitService:
                 purpose="email_verification",
                 ip_address="192.168.1.1",
                 used=False,
-                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15),
+                expires_at=datetime.now(UTC).replace(tzinfo=None)
+                + timedelta(minutes=15),
             )
             db_session.add(magic_link)
         db_session.commit()
@@ -199,8 +207,9 @@ class TestRateLimitService:
 
         # Create magic link (use unique token and naive datetime)
         import uuid
+
         unique_id = str(uuid.uuid4())
-        created_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        created_at = datetime.now(UTC).replace(tzinfo=None)
         magic_link = MagicLink(
             email="test@example.com",
             token=f"test-token-{unique_id}",
@@ -228,6 +237,7 @@ class TestRateLimitService:
 
         # Use unique IP to avoid test isolation issues
         import uuid
+
         unique_ip = f"192.168.1.{uuid.uuid4().hex[:3]}"
         reset_time = service.get_rate_limit_reset_time(unique_ip)
 
@@ -346,4 +356,3 @@ class TestSignupFlow:
         # Activity fields should be None initially
         assert tenant.last_login is None
         assert tenant.last_activity is None
-

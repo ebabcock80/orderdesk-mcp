@@ -1,7 +1,7 @@
 """Magic link generation and verification for email verification."""
 
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 
 from sqlalchemy.orm import Session
@@ -44,7 +44,7 @@ class MagicLinkService:
         token_hash = sha256(token.encode()).hexdigest()
 
         # Calculate expiry time
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=expiry_seconds)
+        expires_at = datetime.now(UTC) + timedelta(seconds=expiry_seconds)
 
         # Create magic link record
         magic_link = MagicLink(
@@ -103,11 +103,13 @@ class MagicLinkService:
         )
 
         if not magic_link:
-            logger.warning("Magic link not found or already used", token_hash=token_hash[:8])
+            logger.warning(
+                "Magic link not found or already used", token_hash=token_hash[:8]
+            )
             return False, None, None
 
         # Check expiry (use naive datetime since SQLite stores naive)
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         if magic_link.expires_at < now:
             logger.warning(
                 "Magic link expired",
@@ -117,9 +119,9 @@ class MagicLinkService:
             return False, None, None
 
         # Mark as used
-        magic_link.used = True
-        magic_link.used_at = datetime.now(timezone.utc)
-        magic_link.token = ""  # Clear raw token after use
+        magic_link.used = True  # type: ignore[assignment]
+        magic_link.used_at = datetime.now(UTC)  # type: ignore[assignment]
+        magic_link.token = ""  # type: ignore[assignment]  # Clear raw token after use
         self.db.commit()
 
         logger.info(
@@ -128,7 +130,12 @@ class MagicLinkService:
             purpose=purpose,
         )
 
-        return True, magic_link.email, magic_link.tenant_id
+        # Return the actual values (not Column objects)
+        return (
+            True,
+            str(magic_link.email),
+            str(magic_link.tenant_id) if magic_link.tenant_id else None,
+        )
 
     def cleanup_expired_links(self) -> int:
         """
@@ -138,12 +145,8 @@ class MagicLinkService:
             Number of links deleted
         """
         # Use naive datetime since SQLite stores naive
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        count = (
-            self.db.query(MagicLink)
-            .filter(MagicLink.expires_at < now)
-            .delete()
-        )
+        now = datetime.now(UTC).replace(tzinfo=None)
+        count = self.db.query(MagicLink).filter(MagicLink.expires_at < now).delete()
         self.db.commit()
 
         if count > 0:
@@ -163,7 +166,7 @@ class MagicLinkService:
             Count of active links
         """
         # Use naive datetime since SQLite stores naive
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         return (
             self.db.query(MagicLink)
             .filter(
@@ -174,4 +177,3 @@ class MagicLinkService:
             )
             .count()
         )
-
