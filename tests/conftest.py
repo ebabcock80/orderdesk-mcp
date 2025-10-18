@@ -46,6 +46,7 @@ def db_session(test_db):
 @pytest.fixture
 def client(test_db):
     """Get test client."""
+
     def override_get_db():
         try:
             db = test_db()

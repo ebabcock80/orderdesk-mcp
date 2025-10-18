@@ -9,7 +9,6 @@ Handles:
 Per specification: Master Key → Tenant → Stores
 """
 
-
 from sqlalchemy.orm import Session
 
 from mcp_server.auth import crypto
@@ -83,10 +82,7 @@ class TenantService:
         master_key_hash, salt = crypto.hash_master_key(master_key)
 
         # Create tenant
-        tenant = Tenant(
-            master_key_hash=master_key_hash,
-            salt=salt
-        )
+        tenant = Tenant(master_key_hash=master_key_hash, salt=salt)
         self.db.add(tenant)
         self.db.commit()
         self.db.refresh(tenant)
@@ -99,7 +95,9 @@ class TenantService:
         """Get tenant by ID."""
         return self.db.query(Tenant).filter(Tenant.id == tenant_id).first()
 
-    def authenticate_or_create(self, master_key: str, auto_provision: bool = False) -> Tenant | None:
+    def authenticate_or_create(
+        self, master_key: str, auto_provision: bool = False
+    ) -> Tenant | None:
         """
         Authenticate tenant or create if auto-provision enabled.
 

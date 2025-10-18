@@ -27,6 +27,7 @@ class TokenBucket:
 
     Per Q11: Allow bursts up to 2x rate, then throttle.
     """
+
     capacity: int  # Maximum tokens (burst allowance)
     rate: float  # Tokens per second refill rate
     tokens: float  # Current tokens available
@@ -94,7 +95,7 @@ class RateLimiter:
                 capacity=self.tenant_capacity,
                 rate=self.tenant_rate,
                 tokens=self.tenant_capacity,  # Start full
-                last_refill=time.time()
+                last_refill=time.time(),
             )
         return self._tenant_buckets[tenant_id]
 
@@ -103,17 +104,12 @@ class RateLimiter:
         if limit_type not in self._ip_buckets[ip_address]:
             rate = rpm / 60.0
             self._ip_buckets[ip_address][limit_type] = TokenBucket(
-                capacity=rpm,
-                rate=rate,
-                tokens=rpm,
-                last_refill=time.time()
+                capacity=rpm, rate=rate, tokens=rpm, last_refill=time.time()
             )
         return self._ip_buckets[ip_address][limit_type]
 
     async def check_tenant_limit(
-        self,
-        tenant_id: str,
-        operation_type: Literal["read", "write"] = "read"
+        self, tenant_id: str, operation_type: Literal["read", "write"] = "read"
     ) -> bool:
         """
         Check if tenant has capacity for operation.
@@ -140,15 +136,13 @@ class RateLimiter:
                 "Tenant rate limited",
                 tenant_id=tenant_id,
                 operation_type=operation_type,
-                retry_after=retry_after
+                retry_after=retry_after,
             )
 
         return allowed
 
     async def check_ip_limit(
-        self,
-        ip_address: str,
-        limit_type: Literal["login", "signup", "console"]
+        self, ip_address: str, limit_type: Literal["login", "signup", "console"]
     ) -> bool:
         """
         Check if IP has capacity for WebUI operation.
@@ -163,7 +157,7 @@ class RateLimiter:
         limits = {
             "login": self.webui_login_limit,
             "signup": self.webui_signup_limit,
-            "console": settings.webui_rate_limit_api_console
+            "console": settings.webui_rate_limit_api_console,
         }
 
         rpm = limits.get(limit_type, 60)
@@ -177,15 +171,13 @@ class RateLimiter:
                 "IP rate limited",
                 ip_address=ip_address,
                 limit_type=limit_type,
-                retry_after=retry_after
+                retry_after=retry_after,
             )
 
         return allowed
 
     async def require_tenant_limit(
-        self,
-        tenant_id: str,
-        operation_type: Literal["read", "write"] = "read"
+        self, tenant_id: str, operation_type: Literal["read", "write"] = "read"
     ) -> None:
         """
         Require tenant rate limit check, raise if exceeded.
@@ -200,13 +192,11 @@ class RateLimiter:
             retry_after = int(bucket.time_until_available(tokens_needed)) + 1
             raise RateLimitError(
                 f"Rate limit exceeded for tenant {tenant_id}. Try again in {retry_after} seconds.",
-                retry_after=retry_after
+                retry_after=retry_after,
             )
 
     async def require_ip_limit(
-        self,
-        ip_address: str,
-        limit_type: Literal["login", "signup", "console"]
+        self, ip_address: str, limit_type: Literal["login", "signup", "console"]
     ) -> None:
         """
         Require IP rate limit check, raise if exceeded.
@@ -217,10 +207,12 @@ class RateLimiter:
         if not await self.check_ip_limit(ip_address, limit_type):
             raise RateLimitError(
                 f"Too many {limit_type} attempts. Please try again later.",
-                retry_after=60
+                retry_after=60,
             )
 
-    def reset(self, tenant_id: str | None = None, ip_address: str | None = None) -> None:
+    def reset(
+        self, tenant_id: str | None = None, ip_address: str | None = None
+    ) -> None:
         """
         Reset rate limit (for testing).
 
@@ -247,4 +239,3 @@ def get_rate_limiter() -> RateLimiter:
     if _rate_limiter is None:
         _rate_limiter = RateLimiter()
     return _rate_limiter
-

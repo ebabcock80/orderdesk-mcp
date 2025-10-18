@@ -41,7 +41,7 @@ class Base(DeclarativeBase):
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_conn, connection_record):
     """Enable foreign key constraints in SQLite."""
-    if hasattr(dbapi_conn, 'execute'):
+    if hasattr(dbapi_conn, "execute"):
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
@@ -50,6 +50,7 @@ def set_sqlite_pragma(dbapi_conn, connection_record):
 # ============================================================================
 # Core Tables (Always Created)
 # ============================================================================
+
 
 class Tenant(Base):
     """
@@ -65,11 +66,11 @@ class Tenant(Base):
     master_key_hash = Column(String(255), nullable=False)  # bcrypt hash
     salt = Column(String(255), nullable=False)  # Random salt for HKDF
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
-
-    __table_args__ = (
-        Index('idx_tenants_master_key_hash', 'master_key_hash'),
+    updated_at = Column(
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
     )
+
+    __table_args__ = (Index("idx_tenants_master_key_hash", "master_key_hash"),)
 
 
 class Store(Base):
@@ -83,7 +84,9 @@ class Store(Base):
     __tablename__ = "stores"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    tenant_id = Column(String, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False)
+    tenant_id = Column(
+        String, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
     store_id = Column(String(255), nullable=False)  # OrderDesk store ID
     store_name = Column(String(255), nullable=False)  # Friendly name for lookup
     label = Column(String(255), nullable=True)  # Optional label
@@ -94,13 +97,15 @@ class Store(Base):
     api_key_nonce = Column(String(255), nullable=False)  # Base64-encoded nonce/IV
 
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+    updated_at = Column(
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
 
     __table_args__ = (
-        Index('idx_stores_tenant_id', 'tenant_id'),
-        Index('idx_stores_store_name', 'tenant_id', 'store_name'),
-        UniqueConstraint('tenant_id', 'store_name', name='uq_tenant_store_name'),
-        UniqueConstraint('tenant_id', 'store_id', name='uq_tenant_store_id'),
+        Index("idx_stores_tenant_id", "tenant_id"),
+        Index("idx_stores_store_name", "tenant_id", "store_name"),
+        UniqueConstraint("tenant_id", "store_name", name="uq_tenant_store_name"),
+        UniqueConstraint("tenant_id", "store_id", name="uq_tenant_store_id"),
     )
 
     def __repr__(self) -> str:
@@ -118,7 +123,9 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    tenant_id = Column(String, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False)
+    tenant_id = Column(
+        String, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
     store_id = Column(String, nullable=True)  # Nullable if tenant-level action
     tool_name = Column(String(255), nullable=False)  # MCP tool name or action
     parameters = Column(Text, nullable=True)  # JSON (secrets redacted)
@@ -132,17 +139,18 @@ class AuditLog(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     __table_args__ = (
-        Index('idx_audit_log_tenant_id', 'tenant_id'),
-        Index('idx_audit_log_created_at', 'created_at'),
-        Index('idx_audit_log_request_id', 'request_id'),
-        Index('idx_audit_log_source', 'source'),
-        Index('idx_audit_log_status', 'status'),
+        Index("idx_audit_log_tenant_id", "tenant_id"),
+        Index("idx_audit_log_created_at", "created_at"),
+        Index("idx_audit_log_request_id", "request_id"),
+        Index("idx_audit_log_source", "source"),
+        Index("idx_audit_log_status", "status"),
     )
 
 
 # ============================================================================
 # WebUI Tables (Created if ENABLE_WEBUI=true)
 # ============================================================================
+
 
 class Session(Base):
     """
@@ -155,18 +163,24 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    tenant_id = Column(String, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False)
-    session_token = Column(String(255), nullable=False, unique=True)  # JWT or session ID
+    tenant_id = Column(
+        String, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    session_token = Column(
+        String(255), nullable=False, unique=True
+    )  # JWT or session ID
     ip_address = Column(String(255), nullable=True)
     user_agent = Column(Text, nullable=True)
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
-    last_activity_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    last_activity_at = Column(
+        DateTime, default=lambda: datetime.now(UTC), nullable=False
+    )
 
     __table_args__ = (
-        Index('idx_sessions_tenant_id', 'tenant_id'),
-        Index('idx_sessions_token', 'session_token'),
-        Index('idx_sessions_expires_at', 'expires_at'),
+        Index("idx_sessions_tenant_id", "tenant_id"),
+        Index("idx_sessions_token", "session_token"),
+        Index("idx_sessions_expires_at", "expires_at"),
     )
 
 
@@ -184,7 +198,9 @@ class MagicLink(Base):
     token = Column(String(255), nullable=False)  # Secure random token
     token_hash = Column(String(255), nullable=False, unique=True)  # SHA-256 hash
     purpose = Column(String(50), nullable=False)  # 'signup' or 'login'
-    tenant_id = Column(String, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=True)  # NULL for signup
+    tenant_id = Column(
+        String, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True
+    )  # NULL for signup
     ip_address = Column(String(255), nullable=True)
     used = Column(Boolean, default=False, nullable=False)
     used_at = Column(DateTime, nullable=True)
@@ -192,10 +208,10 @@ class MagicLink(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     __table_args__ = (
-        Index('idx_magic_links_email', 'email'),
-        Index('idx_magic_links_token_hash', 'token_hash'),
-        Index('idx_magic_links_expires_at', 'expires_at'),
-        Index('idx_magic_links_purpose', 'purpose'),
+        Index("idx_magic_links_email", "email"),
+        Index("idx_magic_links_token_hash", "token_hash"),
+        Index("idx_magic_links_expires_at", "expires_at"),
+        Index("idx_magic_links_purpose", "purpose"),
     )
 
 
@@ -210,9 +226,15 @@ class MasterKeyMetadata(Base):
     __tablename__ = "master_key_metadata"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    tenant_id = Column(String, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False)
-    master_key_prefix = Column(String(16), nullable=False)  # First 8 chars for identification
-    label = Column(String(255), nullable=True)  # User-provided label (e.g., "Production Key")
+    tenant_id = Column(
+        String, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    master_key_prefix = Column(
+        String(16), nullable=False
+    )  # First 8 chars for identification
+    label = Column(
+        String(255), nullable=True
+    )  # User-provided label (e.g., "Production Key")
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     last_used_at = Column(DateTime, nullable=True)
     revoked = Column(Boolean, default=False, nullable=False)
@@ -220,8 +242,8 @@ class MasterKeyMetadata(Base):
     revoked_reason = Column(Text, nullable=True)
 
     __table_args__ = (
-        Index('idx_master_key_metadata_tenant_id', 'tenant_id'),
-        Index('idx_master_key_metadata_revoked', 'revoked'),
+        Index("idx_master_key_metadata_tenant_id", "tenant_id"),
+        Index("idx_master_key_metadata_revoked", "revoked"),
     )
 
 
@@ -258,7 +280,10 @@ def get_engine():
         from mcp_server.config import settings
         from mcp_server.utils.logging import logger
 
-        logger.info("Initializing database engine", database_url=settings.database_url.split('://')[0] + '://...')
+        logger.info(
+            "Initializing database engine",
+            database_url=settings.database_url.split("://")[0] + "://...",
+        )
 
         engine = create_engine(
             settings.database_url,
@@ -273,7 +298,9 @@ def get_session_local():
     """Get the SQLAlchemy session maker."""
     global SessionLocal
     if SessionLocal is None:
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
+        SessionLocal = sessionmaker(
+            autocommit=False, autoflush=False, bind=get_engine()
+        )
     return SessionLocal
 
 
@@ -295,9 +322,14 @@ def init_db() -> None:
     logger.info(
         "Database initialized",
         tables_created=[
-            "tenants", "stores", "audit_log", "webhook_events",
-            "sessions", "magic_links", "master_key_metadata"
-        ]
+            "tenants",
+            "stores",
+            "audit_log",
+            "webhook_events",
+            "sessions",
+            "magic_links",
+            "master_key_metadata",
+        ],
     )
 
 
@@ -320,4 +352,3 @@ def get_db():
         yield db
     finally:
         db.close()
-

@@ -68,7 +68,9 @@ async def mutate_order_full(
     return await client.update_order_with_retry(order_id, changes)
 
 
-async def get_orderdesk_client(request: Request, store_id: str, db: Session) -> OrderDeskClient:
+async def get_orderdesk_client(
+    request: Request, store_id: str, db: Session
+) -> OrderDeskClient:
     """Get OrderDesk client for the specified store."""
     tenant_id = request.state.tenant_id
     store_service = StoreService(db)
@@ -90,7 +92,9 @@ async def get_orderdesk_client(request: Request, store_id: str, db: Session) -> 
         )
 
     # Get decrypted credentials
-    store_id_actual, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+    store_id_actual, api_key = await store_service.get_decrypted_credentials(
+        store, tenant_key
+    )
     return OrderDeskClient(store_id_actual, api_key)
 
 
@@ -109,7 +113,12 @@ async def list_orders(
         tenant_id = request.state.tenant_id
 
         # Check cache first
-        params = {"limit": limit, "offset": offset, "folder_id": folder_id, "status": status}
+        params = {
+            "limit": limit,
+            "offset": offset,
+            "folder_id": folder_id,
+            "status": status,
+        }
         cached = await cache_manager.get(tenant_id, store_id, "orders", params)
         if cached:
             return cached
@@ -441,7 +450,9 @@ async def add_items_to_order(
 
             # Update quantity total
             if order.get("quantity_total"):
-                order["quantity_total"] += sum(item.get("quantity", 0) for item in new_items)
+                order["quantity_total"] += sum(
+                    item.get("quantity", 0) for item in new_items
+                )
 
             return order
 
@@ -578,53 +589,38 @@ async def add_note_to_order(
 # MCP Tools - Order Operations
 # ============================================================================
 
+
 class GetOrderParams(BaseModel):
     """Parameters for orders.get tool."""
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "order_id": "123456",
-                "store_identifier": "production"
-            }
+            "example": {"order_id": "123456", "store_identifier": "production"}
         }
     )
 
     order_id: str = Field(..., description="OrderDesk order ID")
     store_identifier: str | None = Field(
-        None,
-        description="Store ID or name (optional if active store is set)"
+        None, description="Store ID or name (optional if active store is set)"
     )
 
 
 class ListOrdersParams(BaseModel):
     """Parameters for orders.list tool."""
+
     store_identifier: str | None = Field(
-        None,
-        description="Store ID or name (optional if active store is set)"
+        None, description="Store ID or name (optional if active store is set)"
     )
     limit: int = Field(
-        50,
-        ge=1,
-        le=100,
-        description="Number of orders to return (1-100, default 50)"
+        50, ge=1, le=100, description="Number of orders to return (1-100, default 50)"
     )
-    offset: int = Field(
-        0,
-        ge=0,
-        description="Number of orders to skip (default 0)"
-    )
-    folder_id: int | None = Field(
-        None,
-        description="Filter by folder ID"
-    )
+    offset: int = Field(0, ge=0, description="Number of orders to skip (default 0)")
+    folder_id: int | None = Field(None, description="Filter by folder ID")
     status: str | None = Field(
-        None,
-        description="Filter by status (e.g., 'open', 'completed', 'cancelled')"
+        None, description="Filter by status (e.g., 'open', 'completed', 'cancelled')"
     )
     search: str | None = Field(
-        None,
-        description="Search query (searches order ID, email, name, etc.)"
+        None, description="Search query (searches order ID, email, name, etc.)"
     )
 
     class Config:
@@ -633,12 +629,13 @@ class ListOrdersParams(BaseModel):
                 "store_identifier": "production",
                 "limit": 50,
                 "offset": 0,
-                "status": "open"
+                "status": "open",
             }
         }
 
 
 # MCP Tool Implementations
+
 
 async def get_order_mcp(params: GetOrderParams, db: Session = Depends(get_db)) -> dict:
     """
@@ -679,14 +676,16 @@ async def get_order_mcp(params: GetOrderParams, db: Session = Depends(get_db)) -
 
         # Resolve store (by identifier or active store)
         if params.store_identifier:
-            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+            store = await store_service.resolve_store(
+                tenant_id, params.store_identifier
+            )
         else:
             # Use active store from session
             context = get_context()
             if not context.active_store_id:
                 raise ValidationError(
                     "No store specified and no active store set. Use stores.use_store first or provide store_identifier.",
-                    missing_fields=["store_identifier"]
+                    missing_fields=["store_identifier"],
                 )
             store = await store_service.get_store(tenant_id, context.active_store_id)
 
@@ -694,7 +693,9 @@ async def get_order_mcp(params: GetOrderParams, db: Session = Depends(get_db)) -
             raise NotFoundError("Store", params.store_identifier or "active")
 
         # Get decrypted credentials
-        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        store_id, api_key = await store_service.get_decrypted_credentials(
+            store, tenant_key
+        )
 
         # Check cache first
         cache_key = f"orders/{params.order_id}"
@@ -704,13 +705,9 @@ async def get_order_mcp(params: GetOrderParams, db: Session = Depends(get_db)) -
                 "Order fetched from cache",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
-                order_id=params.order_id
+                order_id=params.order_id,
             )
-            return {
-                "status": "success",
-                "order": cached,
-                "cached": True
-            }
+            return {"status": "success", "order": cached, "cached": True}
 
         # Create OrderDesk client
         async with OrderDeskClient(store_id, api_key) as client:
@@ -724,14 +721,10 @@ async def get_order_mcp(params: GetOrderParams, db: Session = Depends(get_db)) -
                 "Order fetched successfully",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
-                order_id=params.order_id
+                order_id=params.order_id,
             )
 
-            return {
-                "status": "success",
-                "order": order,
-                "cached": False
-            }
+            return {"status": "success", "order": order, "cached": False}
 
     except (NotFoundError, ValidationError):
         raise
@@ -744,7 +737,9 @@ async def get_order_mcp(params: GetOrderParams, db: Session = Depends(get_db)) -
         raise ValidationError(f"Failed to fetch order: {str(e)}")
 
 
-async def list_orders_mcp(params: ListOrdersParams, db: Session = Depends(get_db)) -> dict:
+async def list_orders_mcp(
+    params: ListOrdersParams, db: Session = Depends(get_db)
+) -> dict:
     """
     List orders with pagination and filtering.
 
@@ -800,14 +795,16 @@ async def list_orders_mcp(params: ListOrdersParams, db: Session = Depends(get_db
 
         # Resolve store (by identifier or active store)
         if params.store_identifier:
-            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+            store = await store_service.resolve_store(
+                tenant_id, params.store_identifier
+            )
         else:
             # Use active store from session
             context = get_context()
             if not context.active_store_id:
                 raise ValidationError(
                     "No store specified and no active store set. Use stores.use_store first or provide store_identifier.",
-                    missing_fields=["store_identifier"]
+                    missing_fields=["store_identifier"],
                 )
             store = await store_service.get_store(tenant_id, context.active_store_id)
 
@@ -815,7 +812,9 @@ async def list_orders_mcp(params: ListOrdersParams, db: Session = Depends(get_db
             raise NotFoundError("Store", params.store_identifier or "active")
 
         # Get decrypted credentials
-        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        store_id, api_key = await store_service.get_decrypted_credentials(
+            store, tenant_key
+        )
 
         # Build cache parameters (for cache key generation)
         cache_params = {
@@ -830,19 +829,21 @@ async def list_orders_mcp(params: ListOrdersParams, db: Session = Depends(get_db
             cache_params["search"] = params.search
 
         # Check cache first
-        cached = await cache_manager.get(tenant_id, store.store_id, "orders", cache_params)
+        cached = await cache_manager.get(
+            tenant_id, store.store_id, "orders", cache_params
+        )
         if cached:
             logger.info(
                 "Orders fetched from cache",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
-                count=cached.get("count", 0)
+                count=cached.get("count", 0),
             )
             return {
                 "status": "success",
                 "orders": cached.get("orders", []),
                 "pagination": cached.get("pagination", {}),
-                "cached": True
+                "cached": True,
             }
 
         # Create OrderDesk client
@@ -853,7 +854,7 @@ async def list_orders_mcp(params: ListOrdersParams, db: Session = Depends(get_db
                 offset=params.offset,
                 folder_id=params.folder_id,
                 status=params.status,
-                search=params.search
+                search=params.search,
             )
 
             # Prepare response
@@ -864,26 +865,24 @@ async def list_orders_mcp(params: ListOrdersParams, db: Session = Depends(get_db
                     "limit": response["limit"],
                     "offset": response["offset"],
                     "page": response["page"],
-                    "has_more": response["has_more"]
-                }
+                    "has_more": response["has_more"],
+                },
             }
 
             # Cache the result (15 seconds TTL for orders)
-            await cache_manager.set(tenant_id, store.store_id, "orders", result, cache_params)
+            await cache_manager.set(
+                tenant_id, store.store_id, "orders", result, cache_params
+            )
 
             logger.info(
                 "Orders listed successfully",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
                 count=response["count"],
-                page=response["page"]
+                page=response["page"],
             )
 
-            return {
-                "status": "success",
-                **result,
-                "cached": False
-            }
+            return {"status": "success", **result, "cached": False}
 
     except (NotFoundError, ValidationError):
         raise
@@ -899,12 +898,15 @@ async def list_orders_mcp(params: ListOrdersParams, db: Session = Depends(get_db
 # MCP Tool Registration (for MCP server)
 # ============================================================================
 
+
 class CreateOrderParams(BaseModel):
     """Parameters for orders.create tool."""
-    order_data: dict[str, Any] = Field(..., description="Order data including email and items")
+
+    order_data: dict[str, Any] = Field(
+        ..., description="Order data including email and items"
+    )
     store_identifier: str | None = Field(
-        None,
-        description="Store ID or name (optional if active store is set)"
+        None, description="Store ID or name (optional if active store is set)"
     )
 
     class Config:
@@ -913,26 +915,22 @@ class CreateOrderParams(BaseModel):
                 "order_data": {
                     "email": "customer@example.com",
                     "order_items": [
-                        {
-                            "name": "Product A",
-                            "quantity": 2,
-                            "price": 14.99
-                        }
+                        {"name": "Product A", "quantity": 2, "price": 14.99}
                     ],
-                    "shipping_method": "USPS First Class"
+                    "shipping_method": "USPS First Class",
                 },
-                "store_identifier": "production"
+                "store_identifier": "production",
             }
         }
 
 
 class UpdateOrderParams(BaseModel):
     """Parameters for orders.update tool."""
+
     order_id: str = Field(..., description="OrderDesk order ID")
     changes: dict[str, Any] = Field(..., description="Partial changes to apply")
     store_identifier: str | None = Field(
-        None,
-        description="Store ID or name (optional if active store is set)"
+        None, description="Store ID or name (optional if active store is set)"
     )
 
     class Config:
@@ -941,33 +939,33 @@ class UpdateOrderParams(BaseModel):
                 "order_id": "123456",
                 "changes": {
                     "email": "newemail@example.com",
-                    "customer_notes": "Please ship ASAP"
+                    "customer_notes": "Please ship ASAP",
                 },
-                "store_identifier": "production"
+                "store_identifier": "production",
             }
         }
 
 
 class DeleteOrderParams(BaseModel):
     """Parameters for orders.delete tool."""
+
     order_id: str = Field(..., description="OrderDesk order ID")
     store_identifier: str | None = Field(
-        None,
-        description="Store ID or name (optional if active store is set)"
+        None, description="Store ID or name (optional if active store is set)"
     )
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "order_id": "123456",
-                "store_identifier": "production"
-            }
+            "example": {"order_id": "123456", "store_identifier": "production"}
         }
 
 
 # Additional MCP Tool Implementations
 
-async def create_order_mcp(params: CreateOrderParams, db: Session = Depends(get_db)) -> dict:
+
+async def create_order_mcp(
+    params: CreateOrderParams, db: Session = Depends(get_db)
+) -> dict:
     """
     Create a new order.
 
@@ -1001,13 +999,15 @@ async def create_order_mcp(params: CreateOrderParams, db: Session = Depends(get_
 
         # Resolve store
         if params.store_identifier:
-            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+            store = await store_service.resolve_store(
+                tenant_id, params.store_identifier
+            )
         else:
             context = get_context()
             if not context.active_store_id:
                 raise ValidationError(
                     "No store specified and no active store set.",
-                    missing_fields=["store_identifier"]
+                    missing_fields=["store_identifier"],
                 )
             store = await store_service.get_store(tenant_id, context.active_store_id)
 
@@ -1015,7 +1015,9 @@ async def create_order_mcp(params: CreateOrderParams, db: Session = Depends(get_
             raise NotFoundError("Store", params.store_identifier or "active")
 
         # Get decrypted credentials
-        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        store_id, api_key = await store_service.get_decrypted_credentials(
+            store, tenant_key
+        )
 
         # Create OrderDesk client
         async with OrderDeskClient(store_id, api_key) as client:
@@ -1023,19 +1025,18 @@ async def create_order_mcp(params: CreateOrderParams, db: Session = Depends(get_
             order = await client.create_order(params.order_data)
 
             # Invalidate cache (new order affects list queries)
-            await cache_manager.invalidate_pattern(f"{tenant_id}:{store.store_id}:orders")
+            await cache_manager.invalidate_pattern(
+                f"{tenant_id}:{store.store_id}:orders"
+            )
 
             logger.info(
                 "Order created successfully",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
-                order_id=order.get("id")
+                order_id=order.get("id"),
             )
 
-            return {
-                "status": "success",
-                "order": order
-            }
+            return {"status": "success", "order": order}
 
     except (NotFoundError, ValidationError):
         raise
@@ -1047,7 +1048,9 @@ async def create_order_mcp(params: CreateOrderParams, db: Session = Depends(get_
         raise ValidationError(f"Failed to create order: {str(e)}")
 
 
-async def update_order_mcp(params: UpdateOrderParams, db: Session = Depends(get_db)) -> dict:
+async def update_order_mcp(
+    params: UpdateOrderParams, db: Session = Depends(get_db)
+) -> dict:
     """
     Update an order with safe merge workflow.
 
@@ -1086,13 +1089,15 @@ async def update_order_mcp(params: UpdateOrderParams, db: Session = Depends(get_
 
         # Resolve store
         if params.store_identifier:
-            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+            store = await store_service.resolve_store(
+                tenant_id, params.store_identifier
+            )
         else:
             context = get_context()
             if not context.active_store_id:
                 raise ValidationError(
                     "No store specified and no active store set.",
-                    missing_fields=["store_identifier"]
+                    missing_fields=["store_identifier"],
                 )
             store = await store_service.get_store(tenant_id, context.active_store_id)
 
@@ -1100,28 +1105,33 @@ async def update_order_mcp(params: UpdateOrderParams, db: Session = Depends(get_
             raise NotFoundError("Store", params.store_identifier or "active")
 
         # Get decrypted credentials
-        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        store_id, api_key = await store_service.get_decrypted_credentials(
+            store, tenant_key
+        )
 
         # Create OrderDesk client
         async with OrderDeskClient(store_id, api_key) as client:
             # Update with automatic conflict resolution
-            order = await client.update_order_with_retry(params.order_id, params.changes)
+            order = await client.update_order_with_retry(
+                params.order_id, params.changes
+            )
 
             # Invalidate cache for this order and list queries
-            await cache_manager.delete(f"{tenant_id}:{store.store_id}:orders/{params.order_id}")
-            await cache_manager.invalidate_pattern(f"{tenant_id}:{store.store_id}:orders")
+            await cache_manager.delete(
+                f"{tenant_id}:{store.store_id}:orders/{params.order_id}"
+            )
+            await cache_manager.invalidate_pattern(
+                f"{tenant_id}:{store.store_id}:orders"
+            )
 
             logger.info(
                 "Order updated successfully",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
-                order_id=params.order_id
+                order_id=params.order_id,
             )
 
-            return {
-                "status": "success",
-                "order": order
-            }
+            return {"status": "success", "order": order}
 
     except (NotFoundError, ValidationError):
         raise
@@ -1135,7 +1145,9 @@ async def update_order_mcp(params: UpdateOrderParams, db: Session = Depends(get_
         raise ValidationError(f"Failed to update order: {str(e)}")
 
 
-async def delete_order_mcp(params: DeleteOrderParams, db: Session = Depends(get_db)) -> dict:
+async def delete_order_mcp(
+    params: DeleteOrderParams, db: Session = Depends(get_db)
+) -> dict:
     """
     Delete an order.
 
@@ -1164,13 +1176,15 @@ async def delete_order_mcp(params: DeleteOrderParams, db: Session = Depends(get_
 
         # Resolve store
         if params.store_identifier:
-            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+            store = await store_service.resolve_store(
+                tenant_id, params.store_identifier
+            )
         else:
             context = get_context()
             if not context.active_store_id:
                 raise ValidationError(
                     "No store specified and no active store set.",
-                    missing_fields=["store_identifier"]
+                    missing_fields=["store_identifier"],
                 )
             store = await store_service.get_store(tenant_id, context.active_store_id)
 
@@ -1178,7 +1192,9 @@ async def delete_order_mcp(params: DeleteOrderParams, db: Session = Depends(get_
             raise NotFoundError("Store", params.store_identifier or "active")
 
         # Get decrypted credentials
-        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        store_id, api_key = await store_service.get_decrypted_credentials(
+            store, tenant_key
+        )
 
         # Create OrderDesk client
         async with OrderDeskClient(store_id, api_key) as client:
@@ -1186,19 +1202,23 @@ async def delete_order_mcp(params: DeleteOrderParams, db: Session = Depends(get_
             await client.delete_order(params.order_id)
 
             # Invalidate cache for this order and list queries
-            await cache_manager.delete(f"{tenant_id}:{store.store_id}:orders/{params.order_id}")
-            await cache_manager.invalidate_pattern(f"{tenant_id}:{store.store_id}:orders")
+            await cache_manager.delete(
+                f"{tenant_id}:{store.store_id}:orders/{params.order_id}"
+            )
+            await cache_manager.invalidate_pattern(
+                f"{tenant_id}:{store.store_id}:orders"
+            )
 
             logger.info(
                 "Order deleted successfully",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
-                order_id=params.order_id
+                order_id=params.order_id,
             )
 
             return {
                 "status": "success",
-                "message": f"Order {params.order_id} deleted successfully"
+                "message": f"Order {params.order_id} deleted successfully",
             }
 
     except (NotFoundError, ValidationError):
@@ -1217,26 +1237,26 @@ MCP_TOOLS = {
     "orders.get": {
         "function": get_order_mcp,
         "params_schema": GetOrderParams,
-        "description": "Fetch a single order by ID with complete details"
+        "description": "Fetch a single order by ID with complete details",
     },
     "orders.list": {
         "function": list_orders_mcp,
         "params_schema": ListOrdersParams,
-        "description": "List orders with pagination and filtering options"
+        "description": "List orders with pagination and filtering options",
     },
     "orders.create": {
         "function": create_order_mcp,
         "params_schema": CreateOrderParams,
-        "description": "Create a new order in OrderDesk"
+        "description": "Create a new order in OrderDesk",
     },
     "orders.update": {
         "function": update_order_mcp,
         "params_schema": UpdateOrderParams,
-        "description": "Update an order with safe merge workflow (fetch → merge → upload)"
+        "description": "Update an order with safe merge workflow (fetch → merge → upload)",
     },
     "orders.delete": {
         "function": delete_order_mcp,
         "params_schema": DeleteOrderParams,
-        "description": "Delete an order from OrderDesk"
-    }
+        "description": "Delete an order from OrderDesk",
+    },
 }

@@ -16,11 +16,7 @@ from mcp_server.services.orderdesk_client import OrderDeskClient
 @pytest.fixture
 def client():
     """Create OrderDesk client for testing."""
-    return OrderDeskClient(
-        store_id="12345",
-        api_key="test-api-key",
-        max_retries=3
-    )
+    return OrderDeskClient(store_id="12345", api_key="test-api-key", max_retries=3)
 
 
 class TestOrderDeskClient:
@@ -52,10 +48,7 @@ class TestOrderDeskClient:
     def test_get_auth_params(self, client):
         """Should return correct authentication parameters."""
         params = client._get_auth_params()
-        assert params == {
-            "store_id": "12345",
-            "api_key": "test-api-key"
-        }
+        assert params == {"store_id": "12345", "api_key": "test-api-key"}
 
 
 class TestHTTPMethods:
@@ -64,20 +57,22 @@ class TestHTTPMethods:
     @pytest.mark.asyncio
     async def test_get_method(self, client):
         """Should make GET request with correct parameters."""
-        with patch.object(client, '_request_with_retry', new_callable=AsyncMock) as mock_request:
+        with patch.object(
+            client, "_request_with_retry", new_callable=AsyncMock
+        ) as mock_request:
             mock_request.return_value = {"test": "data"}
 
             result = await client.get("/orders", params={"limit": 50})
 
-            mock_request.assert_called_once_with(
-                "GET", "/orders", params={"limit": 50}
-            )
+            mock_request.assert_called_once_with("GET", "/orders", params={"limit": 50})
             assert result == {"test": "data"}
 
     @pytest.mark.asyncio
     async def test_post_method(self, client):
         """Should make POST request with JSON body."""
-        with patch.object(client, '_request_with_retry', new_callable=AsyncMock) as mock_request:
+        with patch.object(
+            client, "_request_with_retry", new_callable=AsyncMock
+        ) as mock_request:
             mock_request.return_value = {"created": True}
 
             result = await client.post("/orders", json={"data": "test"})
@@ -95,7 +90,7 @@ class TestRetryLogic:
     async def test_retry_success_without_errors(self, client):
         """Should succeed immediately if no errors."""
         # Test successful request (no retries needed)
-        with patch.object(client, 'get', new_callable=AsyncMock) as mock_get:
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {"success": True}
 
             result = await client.get("/orders")
@@ -106,12 +101,14 @@ class TestRetryLogic:
     @pytest.mark.asyncio
     async def test_timeout_error_handling(self, client):
         """Should handle timeout errors gracefully."""
-        with patch.object(client, '_ensure_client', new_callable=AsyncMock):
-            with patch.object(client, '_client') as mock_http_client:
+        with patch.object(client, "_ensure_client", new_callable=AsyncMock):
+            with patch.object(client, "_client") as mock_http_client:
                 # Simulate timeout
-                mock_http_client.request = AsyncMock(side_effect=httpx.TimeoutException("Timeout"))
+                mock_http_client.request = AsyncMock(
+                    side_effect=httpx.TimeoutException("Timeout")
+                )
 
-                with patch.object(client, '_backoff', new_callable=AsyncMock):
+                with patch.object(client, "_backoff", new_callable=AsyncMock):
                     with pytest.raises(OrderDeskError) as exc_info:
                         await client._request_with_retry("GET", "/orders")
 
@@ -122,14 +119,14 @@ class TestRetryLogic:
     @pytest.mark.asyncio
     async def test_network_error_handling(self, client):
         """Should handle network errors gracefully."""
-        with patch.object(client, '_ensure_client', new_callable=AsyncMock):
-            with patch.object(client, '_client') as mock_http_client:
+        with patch.object(client, "_ensure_client", new_callable=AsyncMock):
+            with patch.object(client, "_client") as mock_http_client:
                 # Simulate network error
                 mock_http_client.request = AsyncMock(
                     side_effect=httpx.NetworkError("Connection failed")
                 )
 
-                with patch.object(client, '_backoff', new_callable=AsyncMock):
+                with patch.object(client, "_backoff", new_callable=AsyncMock):
                     with pytest.raises(OrderDeskError) as exc_info:
                         await client._request_with_retry("GET", "/orders")
 
@@ -138,8 +135,8 @@ class TestRetryLogic:
     @pytest.mark.asyncio
     async def test_error_mapping_for_404(self, client):
         """Should map 404 to NOT_FOUND error."""
-        with patch.object(client, '_ensure_client', new_callable=AsyncMock):
-            with patch.object(client, '_client') as mock_http_client:
+        with patch.object(client, "_ensure_client", new_callable=AsyncMock):
+            with patch.object(client, "_client") as mock_http_client:
                 mock_response = MagicMock()
                 mock_response.status_code = 404
                 mock_response.json.return_value = {"message": "Not found"}
@@ -168,7 +165,7 @@ class TestBackoffCalculation:
         async def mock_sleep(delay):
             delays.append(delay)
 
-        with patch.object(asyncio, 'sleep', new=mock_sleep):
+        with patch.object(asyncio, "sleep", new=mock_sleep):
             await client._backoff(0)  # First retry
             await client._backoff(1)  # Second retry
             await client._backoff(2)  # Third retry
@@ -187,11 +184,11 @@ class TestOrderOperations:
     @pytest.mark.asyncio
     async def test_get_order(self, client):
         """Should fetch single order by ID."""
-        with patch.object(client, 'get', new_callable=AsyncMock) as mock_get:
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {
                 "id": "123456",
                 "email": "customer@example.com",
-                "order_total": 29.99
+                "order_total": 29.99,
             }
 
             order = await client.get_order("123456")
@@ -202,10 +199,10 @@ class TestOrderOperations:
     @pytest.mark.asyncio
     async def test_list_orders_default_params(self, client):
         """Should list orders with default pagination."""
-        with patch.object(client, 'get', new_callable=AsyncMock) as mock_get:
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = [
                 {"id": "1", "email": "test1@example.com"},
-                {"id": "2", "email": "test2@example.com"}
+                {"id": "2", "email": "test2@example.com"},
             ]
 
             result = await client.list_orders()
@@ -219,15 +216,11 @@ class TestOrderOperations:
     @pytest.mark.asyncio
     async def test_list_orders_with_filters(self, client):
         """Should list orders with filters."""
-        with patch.object(client, 'get', new_callable=AsyncMock) as mock_get:
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {"orders": [{"id": "1"}]}
 
             await client.list_orders(
-                limit=20,
-                offset=40,
-                folder_id=5,
-                status="open",
-                search="test"
+                limit=20, offset=40, folder_id=5, status="open", search="test"
             )
 
             expected_params = {
@@ -235,14 +228,14 @@ class TestOrderOperations:
                 "offset": 40,
                 "folder_id": 5,
                 "status": "open",
-                "search": "test"
+                "search": "test",
             }
             mock_get.assert_called_once_with("/orders", params=expected_params)
 
     @pytest.mark.asyncio
     async def test_list_orders_pagination_metadata(self, client):
         """Should calculate pagination metadata correctly."""
-        with patch.object(client, 'get', new_callable=AsyncMock) as mock_get:
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
             # Return exactly 'limit' items (indicates more pages)
             mock_get.return_value = [{"id": f"{i}"} for i in range(50)]
 
@@ -257,7 +250,7 @@ class TestOrderOperations:
     @pytest.mark.asyncio
     async def test_list_orders_last_page(self, client):
         """Should detect last page (partial results)."""
-        with patch.object(client, 'get', new_callable=AsyncMock) as mock_get:
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
             # Return fewer than 'limit' items (last page)
             mock_get.return_value = [{"id": f"{i}"} for i in range(25)]
 
@@ -313,4 +306,3 @@ class TestContextManager:
 
 
 # Coverage target: >85%
-

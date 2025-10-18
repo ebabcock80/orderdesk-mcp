@@ -62,7 +62,7 @@ class CryptoManager:
             length=32,
             salt=salt.encode(),
             info=info,
-            backend=default_backend()
+            backend=default_backend(),
         )
 
         return hkdf.derive(master_key.encode())
@@ -85,9 +85,7 @@ class CryptoManager:
 
         # Create cipher
         cipher = Cipher(
-            algorithms.AES(tenant_key),
-            modes.GCM(nonce),
-            backend=default_backend()
+            algorithms.AES(tenant_key), modes.GCM(nonce), backend=default_backend()
         )
         encryptor = cipher.encryptor()
 
@@ -98,10 +96,12 @@ class CryptoManager:
         return (
             base64.b64encode(ciphertext).decode(),
             base64.b64encode(encryptor.tag).decode(),
-            base64.b64encode(nonce).decode()
+            base64.b64encode(nonce).decode(),
         )
 
-    def decrypt_api_key(self, ciphertext: str, tag: str, nonce: str, tenant_key: bytes) -> str:
+    def decrypt_api_key(
+        self, ciphertext: str, tag: str, nonce: str, tenant_key: bytes
+    ) -> str:
         """
         Decrypt API key using AES-256-GCM with tag verification.
 
@@ -126,7 +126,7 @@ class CryptoManager:
         cipher = Cipher(
             algorithms.AES(tenant_key),
             modes.GCM(nonce_bytes, tag_bytes),
-            backend=default_backend()
+            backend=default_backend(),
         )
         decryptor = cipher.decryptor()
 
@@ -196,6 +196,7 @@ def get_crypto_manager() -> CryptoManager:
     global crypto_manager
     if crypto_manager is None:
         from mcp_server.config import settings
+
         crypto_manager = CryptoManager(settings.mcp_kms_key)
     return crypto_manager
 
@@ -203,6 +204,7 @@ def get_crypto_manager() -> CryptoManager:
 # ============================================================================
 # Convenience Functions (for cleaner API)
 # ============================================================================
+
 
 def derive_tenant_key(master_key: str, salt: str) -> bytes:
     """Derive tenant key using HKDF-SHA256."""
@@ -237,4 +239,3 @@ def generate_salt() -> str:
 def generate_master_key() -> str:
     """Generate secure master key for signup."""
     return get_crypto_manager().generate_master_key()
-

@@ -64,9 +64,9 @@ async def receive_orderdesk_webhook(
             )
 
         # Check for duplicate events
-        existing_event = db.query(WebhookEvent).filter(
-            WebhookEvent.event_id == event_id
-        ).first()
+        existing_event = (
+            db.query(WebhookEvent).filter(WebhookEvent.event_id == event_id).first()
+        )
 
         if existing_event:
             logger.info(

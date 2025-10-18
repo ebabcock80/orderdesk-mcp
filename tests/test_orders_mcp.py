@@ -26,8 +26,8 @@ def mock_db():
 @pytest.fixture
 def mock_authenticated_session():
     """Mock authenticated session context."""
-    with patch('mcp_server.routers.orders.require_auth') as mock_auth:
-        with patch('mcp_server.routers.orders.get_tenant_key') as mock_key:
+    with patch("mcp_server.routers.orders.require_auth") as mock_auth:
+        with patch("mcp_server.routers.orders.get_tenant_key") as mock_key:
             mock_auth.return_value = "tenant-123"
             mock_key.return_value = b"test-key" * 4  # 32 bytes
             yield
@@ -39,13 +39,10 @@ class TestGetOrderMCP:
     @pytest.mark.asyncio
     async def test_get_order_success(self, mock_db, mock_authenticated_session):
         """Should fetch order successfully."""
-        params = GetOrderParams(
-            order_id="123456",
-            store_identifier="production"
-        )
+        params = GetOrderParams(order_id="123456", store_identifier="production")
 
         # Mock store service
-        with patch('mcp_server.routers.orders.StoreService') as MockStoreService:
+        with patch("mcp_server.routers.orders.StoreService") as MockStoreService:
             mock_store_service = MockStoreService.return_value
 
             # Mock store
@@ -57,19 +54,23 @@ class TestGetOrderMCP:
             )
 
             # Mock cache manager
-            with patch('mcp_server.routers.orders.cache_manager') as mock_cache:
+            with patch("mcp_server.routers.orders.cache_manager") as mock_cache:
                 mock_cache.get = AsyncMock(return_value=None)  # Cache miss
                 mock_cache.set = AsyncMock()
 
                 # Mock OrderDesk client
-                with patch('mcp_server.routers.orders.OrderDeskClient') as MockClient:
+                with patch("mcp_server.routers.orders.OrderDeskClient") as MockClient:
                     mock_client_instance = AsyncMock()
-                    mock_client_instance.get_order = AsyncMock(return_value={
-                        "id": "123456",
-                        "email": "test@example.com",
-                        "order_total": 29.99
-                    })
-                    MockClient.return_value.__aenter__.return_value = mock_client_instance
+                    mock_client_instance.get_order = AsyncMock(
+                        return_value={
+                            "id": "123456",
+                            "email": "test@example.com",
+                            "order_total": 29.99,
+                        }
+                    )
+                    MockClient.return_value.__aenter__.return_value = (
+                        mock_client_instance
+                    )
 
                     result = await get_order_mcp(params, mock_db)
 
@@ -82,7 +83,7 @@ class TestGetOrderMCP:
         """Should return cached order if available."""
         params = GetOrderParams(order_id="123456", store_identifier="production")
 
-        with patch('mcp_server.routers.orders.StoreService') as MockStoreService:
+        with patch("mcp_server.routers.orders.StoreService") as MockStoreService:
             mock_store_service = MockStoreService.return_value
             mock_store = MagicMock()
             mock_store.store_id = "12345"
@@ -92,11 +93,10 @@ class TestGetOrderMCP:
             )
 
             # Mock cache hit
-            with patch('mcp_server.routers.orders.cache_manager') as mock_cache:
-                mock_cache.get = AsyncMock(return_value={
-                    "id": "123456",
-                    "email": "cached@example.com"
-                })
+            with patch("mcp_server.routers.orders.cache_manager") as mock_cache:
+                mock_cache.get = AsyncMock(
+                    return_value={"id": "123456", "email": "cached@example.com"}
+                )
 
                 result = await get_order_mcp(params, mock_db)
 
@@ -109,7 +109,7 @@ class TestGetOrderMCP:
         """Should raise NotFoundError if store doesn't exist."""
         params = GetOrderParams(order_id="123456", store_identifier="nonexistent")
 
-        with patch('mcp_server.routers.orders.StoreService') as MockStoreService:
+        with patch("mcp_server.routers.orders.StoreService") as MockStoreService:
             mock_store_service = MockStoreService.return_value
             mock_store_service.resolve_store = AsyncMock(return_value=None)
 
@@ -121,7 +121,7 @@ class TestGetOrderMCP:
         """Should raise ValidationError if no store specified and no active store."""
         params = GetOrderParams(order_id="123456")  # No store_identifier
 
-        with patch('mcp_server.routers.orders.get_context') as mock_context:
+        with patch("mcp_server.routers.orders.get_context") as mock_context:
             mock_context.return_value.active_store_id = None
 
             with pytest.raises(ValidationError) as exc_info:
@@ -136,13 +136,9 @@ class TestListOrdersMCP:
     @pytest.mark.asyncio
     async def test_list_orders_success(self, mock_db, mock_authenticated_session):
         """Should list orders with pagination."""
-        params = ListOrdersParams(
-            store_identifier="production",
-            limit=20,
-            offset=0
-        )
+        params = ListOrdersParams(store_identifier="production", limit=20, offset=0)
 
-        with patch('mcp_server.routers.orders.StoreService') as MockStoreService:
+        with patch("mcp_server.routers.orders.StoreService") as MockStoreService:
             mock_store_service = MockStoreService.return_value
             mock_store = MagicMock()
             mock_store.store_id = "12345"
@@ -151,21 +147,25 @@ class TestListOrdersMCP:
                 return_value=("12345", "api-key")
             )
 
-            with patch('mcp_server.routers.orders.cache_manager') as mock_cache:
+            with patch("mcp_server.routers.orders.cache_manager") as mock_cache:
                 mock_cache.get = AsyncMock(return_value=None)  # Cache miss
                 mock_cache.set = AsyncMock()
 
-                with patch('mcp_server.routers.orders.OrderDeskClient') as MockClient:
+                with patch("mcp_server.routers.orders.OrderDeskClient") as MockClient:
                     mock_client_instance = AsyncMock()
-                    mock_client_instance.list_orders = AsyncMock(return_value={
-                        "orders": [{"id": f"{i}"} for i in range(20)],
-                        "count": 20,
-                        "limit": 20,
-                        "offset": 0,
-                        "page": 1,
-                        "has_more": True
-                    })
-                    MockClient.return_value.__aenter__.return_value = mock_client_instance
+                    mock_client_instance.list_orders = AsyncMock(
+                        return_value={
+                            "orders": [{"id": f"{i}"} for i in range(20)],
+                            "count": 20,
+                            "limit": 20,
+                            "offset": 0,
+                            "page": 1,
+                            "has_more": True,
+                        }
+                    )
+                    MockClient.return_value.__aenter__.return_value = (
+                        mock_client_instance
+                    )
 
                     result = await list_orders_mcp(params, mock_db)
 
@@ -183,10 +183,10 @@ class TestListOrdersMCP:
             offset=0,
             folder_id=5,
             status="open",
-            search="urgent"
+            search="urgent",
         )
 
-        with patch('mcp_server.routers.orders.StoreService') as MockStoreService:
+        with patch("mcp_server.routers.orders.StoreService") as MockStoreService:
             mock_store_service = MockStoreService.return_value
             mock_store = MagicMock()
             mock_store_service.resolve_store = AsyncMock(return_value=mock_store)
@@ -194,33 +194,32 @@ class TestListOrdersMCP:
                 return_value=("12345", "api-key")
             )
 
-            with patch('mcp_server.routers.orders.cache_manager') as mock_cache:
+            with patch("mcp_server.routers.orders.cache_manager") as mock_cache:
                 mock_cache.get = AsyncMock(return_value=None)
                 mock_cache.set = AsyncMock()
 
-                with patch('mcp_server.routers.orders.OrderDeskClient') as MockClient:
+                with patch("mcp_server.routers.orders.OrderDeskClient") as MockClient:
                     mock_client_instance = AsyncMock()
-                    mock_client_instance.list_orders = AsyncMock(return_value={
-                        "orders": [],
-                        "count": 0,
-                        "limit": 50,
-                        "offset": 0,
-                        "page": 1,
-                        "has_more": False
-                    })
-                    MockClient.return_value.__aenter__.return_value = mock_client_instance
+                    mock_client_instance.list_orders = AsyncMock(
+                        return_value={
+                            "orders": [],
+                            "count": 0,
+                            "limit": 50,
+                            "offset": 0,
+                            "page": 1,
+                            "has_more": False,
+                        }
+                    )
+                    MockClient.return_value.__aenter__.return_value = (
+                        mock_client_instance
+                    )
 
                     await list_orders_mcp(params, mock_db)
 
                     # Verify filters were passed
                     mock_client_instance.list_orders.assert_called_once_with(
-                        limit=50,
-                        offset=0,
-                        folder_id=5,
-                        status="open",
-                        search="urgent"
+                        limit=50, offset=0, folder_id=5, status="open", search="urgent"
                     )
 
 
 # Coverage target: >80%
-

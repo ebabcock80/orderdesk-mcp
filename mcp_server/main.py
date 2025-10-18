@@ -15,21 +15,27 @@ except ImportError:
     class Counter:
         def __init__(self, *args, **kwargs):
             pass
+
         def labels(self, **kwargs):
             return self
+
         def inc(self):
             pass
 
     class Histogram:
         def __init__(self, *args, **kwargs):
             pass
+
         def labels(self, **kwargs):
             return self
+
         def observe(self, value):
             pass
 
     def generate_latest():
         return b"# Prometheus metrics not available\n"
+
+
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from mcp_server.auth.middleware import auth_middleware
@@ -37,7 +43,11 @@ from mcp_server.config import settings
 from mcp_server.models.database import create_tables
 from mcp_server.routers import health, orders, products, stores  # webhooks - Phase 5+
 from mcp_server.utils.logging import logger
-from mcp_server.utils.proxy import get_cloudflare_ray, get_real_client_ip, should_add_hsts
+from mcp_server.utils.proxy import (
+    get_cloudflare_ray,
+    get_real_client_ip,
+    should_add_hsts,
+)
 
 # Prometheus metrics
 REQUEST_COUNT = Counter(
@@ -139,7 +149,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # Add HSTS header if HTTPS
         if should_add_hsts(request):
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
 
         # Add other security headers
         response.headers["X-Content-Type-Options"] = "nosniff"

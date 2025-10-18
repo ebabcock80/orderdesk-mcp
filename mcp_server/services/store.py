@@ -10,7 +10,6 @@ Handles:
 Per specification: One tenant → many stores, lookup by store_name supported.
 """
 
-
 from sqlalchemy.orm import Session
 
 from mcp_server.auth import crypto
@@ -39,7 +38,7 @@ class StoreService:
         api_key: str,
         store_name: str | None = None,
         label: str | None = None,
-        tenant_key: bytes | None = None
+        tenant_key: bytes | None = None,
     ) -> Store:
         """
         Register new OrderDesk store with encrypted credentials.
@@ -66,33 +65,37 @@ class StoreService:
             tenant = self.db.query(Tenant).filter(Tenant.id == tenant_id).first()
             if not tenant:
                 raise NotFoundError("Tenant", tenant_id)
-            tenant_key = crypto.derive_tenant_key(api_key, tenant.salt)  # Derive from master key
+            tenant_key = crypto.derive_tenant_key(
+                api_key, tenant.salt
+            )  # Derive from master key
 
         # Default store_name to store_id
         if not store_name:
             store_name = store_id
 
         # Check for duplicates
-        existing_by_name = self.db.query(Store).filter(
-            Store.tenant_id == tenant_id,
-            Store.store_name == store_name
-        ).first()
+        existing_by_name = (
+            self.db.query(Store)
+            .filter(Store.tenant_id == tenant_id, Store.store_name == store_name)
+            .first()
+        )
 
         if existing_by_name:
             raise ValidationError(
                 f"Store name '{store_name}' already exists for this tenant",
-                invalid_fields={"store_name": "duplicate"}
+                invalid_fields={"store_name": "duplicate"},
             )
 
-        existing_by_id = self.db.query(Store).filter(
-            Store.tenant_id == tenant_id,
-            Store.store_id == store_id
-        ).first()
+        existing_by_id = (
+            self.db.query(Store)
+            .filter(Store.tenant_id == tenant_id, Store.store_id == store_id)
+            .first()
+        )
 
         if existing_by_id:
             raise ValidationError(
                 f"Store ID '{store_id}' already registered for this tenant",
-                invalid_fields={"store_id": "duplicate"}
+                invalid_fields={"store_id": "duplicate"},
             )
 
         # Encrypt API key with AES-256-GCM
@@ -106,7 +109,7 @@ class StoreService:
             label=label,
             api_key_ciphertext=ciphertext,
             api_key_tag=tag,
-            api_key_nonce=nonce
+            api_key_nonce=nonce,
         )
 
         self.db.add(store)
@@ -117,7 +120,7 @@ class StoreService:
             "Store registered",
             tenant_id=tenant_id,
             store_id=store_id,
-            store_name=store_name
+            store_name=store_name,
         )
 
         return store
@@ -128,9 +131,12 @@ class StoreService:
 
         Per specification: Tenant isolation, no cross-tenant access.
         """
-        stores = self.db.query(Store).filter(
-            Store.tenant_id == tenant_id
-        ).order_by(Store.created_at.desc()).all()
+        stores = (
+            self.db.query(Store)
+            .filter(Store.tenant_id == tenant_id)
+            .order_by(Store.created_at.desc())
+            .all()
+        )
 
         return stores
 
@@ -142,10 +148,11 @@ class StoreService:
             tenant_id: Tenant ID
             store_id: OrderDesk store ID
         """
-        return self.db.query(Store).filter(
-            Store.tenant_id == tenant_id,
-            Store.store_id == store_id
-        ).first()
+        return (
+            self.db.query(Store)
+            .filter(Store.tenant_id == tenant_id, Store.store_id == store_id)
+            .first()
+        )
 
     async def get_store_by_name(self, tenant_id: str, store_name: str) -> Store | None:
         """
@@ -153,10 +160,11 @@ class StoreService:
 
         Per specification: Enable lookup by store_name to reduce parameter repetition.
         """
-        return self.db.query(Store).filter(
-            Store.tenant_id == tenant_id,
-            Store.store_name == store_name
-        ).first()
+        return (
+            self.db.query(Store)
+            .filter(Store.tenant_id == tenant_id, Store.store_name == store_name)
+            .first()
+        )
 
     async def resolve_store(self, tenant_id: str, identifier: str) -> Store | None:
         """
@@ -202,15 +210,13 @@ class StoreService:
             "Store deleted",
             tenant_id=tenant_id,
             store_id=store_id,
-            store_name=store.store_name
+            store_name=store.store_name,
         )
 
         return True
 
     async def get_decrypted_credentials(
-        self,
-        store: Store,
-        tenant_key: bytes
+        self, store: Store, tenant_key: bytes
     ) -> tuple[str, str]:
         """
         Get decrypted OrderDesk credentials.
@@ -227,19 +233,13 @@ class StoreService:
         """
         # Decrypt API key using AES-256-GCM
         api_key = crypto.decrypt_api_key(
-            store.api_key_ciphertext,
-            store.api_key_tag,
-            store.api_key_nonce,
-            tenant_key
+            store.api_key_ciphertext, store.api_key_tag, store.api_key_nonce, tenant_key
         )
 
         return store.store_id, api_key
 
     async def test_store_credentials(
-        self,
-        tenant_id: str,
-        store_id: str,
-        tenant_key: bytes
+        self, tenant_id: str, store_id: str, tenant_key: bytes
     ) -> dict:
         """
         Test store credentials with OrderDesk API.
@@ -258,7 +258,9 @@ class StoreService:
 
         # Decrypt credentials
         try:
-            od_store_id, api_key = await self.get_decrypted_credentials(store, tenant_key)
+            od_store_id, api_key = await self.get_decrypted_credentials(
+                store, tenant_key
+            )
         except Exception as e:
             logger.error("Decryption failed", error=str(e))
             return {"status": "error", "message": "Failed to decrypt credentials"}
@@ -272,7 +274,7 @@ class StoreService:
                 return {
                     "status": "success",
                     "message": "Connection successful",
-                    "orderdesk_time": result.get("current_date_time")
+                    "orderdesk_time": result.get("current_date_time"),
                 }
             else:
                 return {"status": "error", "message": "OrderDesk API returned error"}
@@ -280,4 +282,3 @@ class StoreService:
         except Exception as e:
             logger.error("OrderDesk API test failed", error=str(e))
             return {"status": "error", "message": f"Connection failed: {str(e)}"}
-

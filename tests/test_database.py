@@ -43,10 +43,7 @@ class TestTenantModel:
 
     def test_create_tenant(self, db_session):
         """Should create tenant with required fields."""
-        tenant = Tenant(
-            master_key_hash="hashed-key",
-            salt="random-salt"
-        )
+        tenant = Tenant(master_key_hash="hashed-key", salt="random-salt")
         db_session.add(tenant)
         db_session.commit()
 
@@ -61,7 +58,7 @@ class TestTenantModel:
 
         # UUID format: 8-4-4-4-12 characters
         assert len(tenant.id) == 36
-        assert tenant.id.count('-') == 4
+        assert tenant.id.count("-") == 4
 
 
 class TestStoreModel:
@@ -81,7 +78,7 @@ class TestStoreModel:
             store_name="my-store",
             api_key_ciphertext="encrypted",
             api_key_tag="tag",
-            api_key_nonce="nonce"
+            api_key_nonce="nonce",
         )
         db_session.add(store)
         db_session.commit()
@@ -103,7 +100,7 @@ class TestStoreModel:
             store_name="duplicate-name",
             api_key_ciphertext="enc1",
             api_key_tag="tag1",
-            api_key_nonce="nonce1"
+            api_key_nonce="nonce1",
         )
         db_session.add(store1)
         db_session.commit()
@@ -115,7 +112,7 @@ class TestStoreModel:
             store_name="duplicate-name",
             api_key_ciphertext="enc2",
             api_key_tag="tag2",
-            api_key_nonce="nonce2"
+            api_key_nonce="nonce2",
         )
         db_session.add(store2)
 
@@ -134,7 +131,7 @@ class TestStoreModel:
             store_name="store1",
             api_key_ciphertext="enc1",
             api_key_tag="tag1",
-            api_key_nonce="nonce1"
+            api_key_nonce="nonce1",
         )
         db_session.add(store1)
         db_session.commit()
@@ -145,7 +142,7 @@ class TestStoreModel:
             store_name="store2",
             api_key_ciphertext="enc2",
             api_key_tag="tag2",
-            api_key_nonce="nonce2"
+            api_key_nonce="nonce2",
         )
         db_session.add(store2)
 
@@ -165,7 +162,7 @@ class TestStoreModel:
             store_name="my-store",
             api_key_ciphertext="enc1",
             api_key_tag="tag1",
-            api_key_nonce="nonce1"
+            api_key_nonce="nonce1",
         )
         store2 = Store(
             tenant_id=tenant2.id,
@@ -173,7 +170,7 @@ class TestStoreModel:
             store_name="my-store",  # Same name, different tenant
             api_key_ciphertext="enc2",
             api_key_tag="tag2",
-            api_key_nonce="nonce2"
+            api_key_nonce="nonce2",
         )
         db_session.add_all([store1, store2])
         db_session.commit()
@@ -193,7 +190,7 @@ class TestStoreModel:
             store_name="my-store",
             api_key_ciphertext="enc",
             api_key_tag="tag",
-            api_key_nonce="nonce"
+            api_key_nonce="nonce",
         )
         db_session.add(store)
         db_session.commit()
@@ -226,7 +223,7 @@ class TestAuditLogModel:
             status="success",
             duration_ms=150,
             request_id="correlation-123",
-            source="mcp"
+            source="mcp",
         )
         db_session.add(log)
         db_session.commit()
@@ -252,7 +249,7 @@ class TestWebUIModels:
             tenant_id=tenant.id,
             session_token="jwt-token-123",
             ip_address="192.168.1.1",
-            expires_at=datetime.now(UTC) + timedelta(hours=24)
+            expires_at=datetime.now(UTC) + timedelta(hours=24),
         )
         db_session.add(session)
         db_session.commit()
@@ -269,7 +266,7 @@ class TestWebUIModels:
             token="secure-token",
             token_hash="sha256-hash",
             purpose="signup",
-            expires_at=datetime.now(UTC) + timedelta(minutes=15)
+            expires_at=datetime.now(UTC) + timedelta(minutes=15),
         )
         db_session.add(link)
         db_session.commit()
@@ -287,7 +284,7 @@ class TestWebUIModels:
             token="token1",
             token_hash="duplicate-hash",
             purpose="login",
-            expires_at=datetime.now(UTC) + timedelta(minutes=15)
+            expires_at=datetime.now(UTC) + timedelta(minutes=15),
         )
         db_session.add(link1)
         db_session.commit()
@@ -297,7 +294,7 @@ class TestWebUIModels:
             token="token2",
             token_hash="duplicate-hash",  # Duplicate
             purpose="login",
-            expires_at=datetime.now(UTC) + timedelta(minutes=15)
+            expires_at=datetime.now(UTC) + timedelta(minutes=15),
         )
         db_session.add(link2)
 
@@ -306,4 +303,3 @@ class TestWebUIModels:
 
 
 # Coverage target: >85%
-

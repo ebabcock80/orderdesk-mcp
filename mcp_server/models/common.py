@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 # Exception Types
 # ============================================================================
 
+
 class MCPError(Exception):
     """Base exception for all MCP server errors."""
 
@@ -23,7 +24,7 @@ class MCPError(Exception):
             "error": {
                 "code": self.code,
                 "message": self.message,
-                "details": self.details
+                "details": self.details,
             }
         }
 
@@ -37,7 +38,7 @@ class OrderDeskError(MCPError):
         code: str | None = None,
         status_code: int | None = None,
         response: dict | None = None,
-        details: dict | None = None
+        details: dict | None = None,
     ):
         # Build details dict
         error_details = details.copy() if details else {}
@@ -47,9 +48,7 @@ class OrderDeskError(MCPError):
             error_details["response"] = response
 
         super().__init__(
-            code=code or "ORDERDESK_API_ERROR",
-            message=message,
-            details=error_details
+            code=code or "ORDERDESK_API_ERROR", message=message, details=error_details
         )
 
 
@@ -61,7 +60,7 @@ class ValidationError(MCPError):
         message: str,
         missing_fields: list[str] | None = None,
         invalid_fields: dict[str, str] | None = None,
-        example: dict[str, Any] | None = None
+        example: dict[str, Any] | None = None,
     ):
         details = {}
         if missing_fields:
@@ -71,21 +70,14 @@ class ValidationError(MCPError):
         if example:
             details["example_request"] = example
 
-        super().__init__(
-            code="VALIDATION_ERROR",
-            message=message,
-            details=details
-        )
+        super().__init__(code="VALIDATION_ERROR", message=message, details=details)
 
 
 class AuthError(MCPError):
     """Authentication or authorization error."""
 
     def __init__(self, message: str):
-        super().__init__(
-            code="AUTH_ERROR",
-            message=message
-        )
+        super().__init__(code="AUTH_ERROR", message=message)
 
 
 class ConflictError(MCPError):
@@ -95,7 +87,7 @@ class ConflictError(MCPError):
         super().__init__(
             code="CONFLICT_ERROR",
             message=message,
-            details={"retries_attempted": retries} if retries else {}
+            details={"retries_attempted": retries} if retries else {},
         )
 
 
@@ -106,7 +98,7 @@ class RateLimitError(MCPError):
         super().__init__(
             code="RATE_LIMIT_EXCEEDED",
             message=message,
-            details={"retry_after_seconds": retry_after} if retry_after else {}
+            details={"retry_after_seconds": retry_after} if retry_after else {},
         )
 
 
@@ -117,7 +109,7 @@ class NotFoundError(MCPError):
         super().__init__(
             code="NOT_FOUND",
             message=f"{resource_type} not found: {identifier}",
-            details={"resource_type": resource_type, "identifier": identifier}
+            details={"resource_type": resource_type, "identifier": identifier},
         )
 
 
@@ -125,7 +117,7 @@ class NotFoundError(MCPError):
 # Result Envelope
 # ============================================================================
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class Result[T](BaseModel):
@@ -134,6 +126,7 @@ class Result[T](BaseModel):
 
     Provides consistent response format with status, data, and error fields.
     """
+
     status: Literal["success", "error"]
     data: T | None = None
     error: dict[str, Any] | None = None
@@ -146,18 +139,17 @@ class Result[T](BaseModel):
     @classmethod
     def failure(cls, error: MCPError) -> "Result[T]":
         """Create error result from exception."""
-        return cls(
-            status="error",
-            error=error.to_dict()["error"]
-        )
+        return cls(status="error", error=error.to_dict()["error"])
 
 
 # ============================================================================
 # Common Response Models
 # ============================================================================
 
+
 class StatusResponse(BaseModel):
     """Standard status response."""
+
     status: Literal["success", "error"]
     message: str
     execution_time: str | None = None
@@ -165,6 +157,7 @@ class StatusResponse(BaseModel):
 
 class PaginationInfo(BaseModel):
     """Pagination information for list responses."""
+
     page: int = Field(ge=1, description="Current page number")
     limit: int = Field(ge=1, le=250, description="Items per page")
     total: int | None = Field(None, description="Total items (if available)")
@@ -175,11 +168,12 @@ class PaginationInfo(BaseModel):
 # Helper Functions
 # ============================================================================
 
+
 def validation_error_response(
     detail: str,
     missing: list[str] | None = None,
     invalid: dict[str, str] | None = None,
-    example: dict[str, Any] | None = None
+    example: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a validation error response with helpful information.
@@ -188,10 +182,6 @@ def validation_error_response(
     and provide a minimal valid example.
     """
     error = ValidationError(
-        message=detail,
-        missing_fields=missing,
-        invalid_fields=invalid,
-        example=example
+        message=detail, missing_fields=missing, invalid_fields=invalid, example=example
     )
     return error.to_dict()
-

@@ -36,7 +36,7 @@ class OrderDeskClient:
         store_id: str,
         api_key: str,
         timeout: httpx.Timeout | None = None,
-        max_retries: int = 3
+        max_retries: int = 3,
     ):
         """
         Initialize OrderDesk client.
@@ -54,9 +54,9 @@ class OrderDeskClient:
         # Configure timeout (per specification)
         self.timeout = timeout or httpx.Timeout(
             connect=15.0,  # Connection timeout
-            read=60.0,     # Read timeout (OrderDesk can be slow)
-            write=60.0,    # Write timeout
-            pool=5.0       # Pool timeout
+            read=60.0,  # Read timeout (OrderDesk can be slow)
+            write=60.0,  # Write timeout
+            pool=5.0,  # Pool timeout
         )
 
         # Create async client (reusable)
@@ -80,7 +80,7 @@ class OrderDeskClient:
                     "User-Agent": "OrderDesk-MCP-Server/0.1.0",
                     "Accept": "application/json",
                 },
-                follow_redirects=True
+                follow_redirects=True,
             )
 
     async def close(self):
@@ -119,10 +119,7 @@ class OrderDeskClient:
         Returns:
             Dict of auth parameters
         """
-        return {
-            "store_id": self.store_id,
-            "api_key": self.api_key
-        }
+        return {"store_id": self.store_id, "api_key": self.api_key}
 
     async def _request_with_retry(
         self,
@@ -130,7 +127,7 @@ class OrderDeskClient:
         path: str,
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
-        attempt: int = 0
+        attempt: int = 0,
     ) -> dict[str, Any]:
         """
         Make HTTP request with automatic retry logic.
@@ -173,22 +170,17 @@ class OrderDeskClient:
                 method=method,
                 path=path,
                 attempt=attempt + 1,
-                max_retries=self.max_retries
+                max_retries=self.max_retries,
             )
 
             # Make request
             response = await self._client.request(
-                method=method,
-                url=url,
-                params=all_params,
-                json=json
+                method=method, url=url, params=all_params, json=json
             )
 
             # Check for errors
             if response.status_code >= 400:
-                await self._handle_error_response(
-                    response, method, path, attempt
-                )
+                await self._handle_error_response(response, method, path, attempt)
 
             # Parse JSON response
             data = response.json()
@@ -198,7 +190,7 @@ class OrderDeskClient:
                 method=method,
                 path=path,
                 status_code=response.status_code,
-                attempt=attempt + 1
+                attempt=attempt + 1,
             )
 
             return data
@@ -209,7 +201,7 @@ class OrderDeskClient:
                 method=method,
                 path=path,
                 attempt=attempt + 1,
-                error=str(e)
+                error=str(e),
             )
 
             # Retry on timeout
@@ -222,7 +214,7 @@ class OrderDeskClient:
             raise OrderDeskError(
                 code="TIMEOUT",
                 message=f"OrderDesk API timeout after {attempt + 1} attempts",
-                details={"method": method, "path": path}
+                details={"method": method, "path": path},
             )
 
         except httpx.NetworkError as e:
@@ -231,7 +223,7 @@ class OrderDeskClient:
                 method=method,
                 path=path,
                 attempt=attempt + 1,
-                error=str(e)
+                error=str(e),
             )
 
             # Retry on network error
@@ -244,7 +236,7 @@ class OrderDeskClient:
             raise OrderDeskError(
                 code="NETWORK_ERROR",
                 message=f"OrderDesk API network error after {attempt + 1} attempts",
-                details={"method": method, "path": path, "error": str(e)}
+                details={"method": method, "path": path, "error": str(e)},
             )
 
         except Exception as e:
@@ -253,20 +245,16 @@ class OrderDeskClient:
                 method=method,
                 path=path,
                 attempt=attempt + 1,
-                error=str(e)
+                error=str(e),
             )
             raise OrderDeskError(
                 code="UNEXPECTED_ERROR",
                 message=f"Unexpected error calling OrderDesk API: {str(e)}",
-                details={"method": method, "path": path}
+                details={"method": method, "path": path},
             )
 
     async def _handle_error_response(
-        self,
-        response: httpx.Response,
-        method: str,
-        path: str,
-        attempt: int
+        self, response: httpx.Response, method: str, path: str, attempt: int
     ):
         """
         Handle HTTP error responses.
@@ -285,7 +273,9 @@ class OrderDeskClient:
         # Try to parse error message from response
         try:
             error_data = response.json()
-            error_message = error_data.get("message", error_data.get("error", "Unknown error"))
+            error_message = error_data.get(
+                "message", error_data.get("error", "Unknown error")
+            )
         except Exception:
             error_message = response.text or f"HTTP {status_code}"
 
@@ -295,7 +285,7 @@ class OrderDeskClient:
             path=path,
             status_code=status_code,
             error_message=error_message,
-            attempt=attempt + 1
+            attempt=attempt + 1,
         )
 
         # Retry on specific status codes
@@ -306,7 +296,7 @@ class OrderDeskClient:
                 "Retrying OrderDesk API request",
                 status_code=status_code,
                 attempt=attempt + 1,
-                max_retries=self.max_retries
+                max_retries=self.max_retries,
             )
             await self._backoff(attempt)
             # Note: This will be caught by caller and retried
@@ -322,7 +312,7 @@ class OrderDeskClient:
             500: "INTERNAL_ERROR",
             502: "BAD_GATEWAY",
             503: "SERVICE_UNAVAILABLE",
-            504: "GATEWAY_TIMEOUT"
+            504: "GATEWAY_TIMEOUT",
         }
 
         error_code = error_code_map.get(status_code, "API_ERROR")
@@ -334,8 +324,8 @@ class OrderDeskClient:
                 "status_code": status_code,
                 "method": method,
                 "path": path,
-                "attempt": attempt + 1
-            }
+                "attempt": attempt + 1,
+            },
         )
 
     async def _backoff(self, attempt: int):
@@ -351,7 +341,7 @@ class OrderDeskClient:
         max_delay = 10.0  # 10 seconds max
 
         # Calculate exponential backoff
-        delay = min(base_delay * (2 ** attempt), max_delay)
+        delay = min(base_delay * (2**attempt), max_delay)
 
         # Add jitter (±25%)
         jitter = delay * 0.25 * (random.random() * 2 - 1)
@@ -360,7 +350,7 @@ class OrderDeskClient:
         logger.info(
             "Backing off before retry",
             attempt=attempt + 1,
-            delay_seconds=round(delay, 2)
+            delay_seconds=round(delay, 2),
         )
 
         await asyncio.sleep(delay)
@@ -369,7 +359,9 @@ class OrderDeskClient:
     # Public API Methods
     # ========================================================================
 
-    async def get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def get(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Make GET request.
 
@@ -386,7 +378,7 @@ class OrderDeskClient:
         self,
         path: str,
         json: dict[str, Any] | None = None,
-        params: dict[str, Any] | None = None
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Make POST request.
@@ -405,7 +397,7 @@ class OrderDeskClient:
         self,
         path: str,
         json: dict[str, Any] | None = None,
-        params: dict[str, Any] | None = None
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Make PUT request.
@@ -420,7 +412,9 @@ class OrderDeskClient:
         """
         return await self._request_with_retry("PUT", path, params=params, json=json)
 
-    async def delete(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def delete(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Make DELETE request.
 
@@ -469,7 +463,7 @@ class OrderDeskClient:
         offset: int = 0,
         folder_id: int | None = None,
         status: str | None = None,
-        search: str | None = None
+        search: str | None = None,
     ) -> dict[str, Any]:
         """
         List orders with pagination and filtering.
@@ -514,21 +508,18 @@ class OrderDeskClient:
             raise OrderDeskError(
                 code="INVALID_PARAMETER",
                 message=f"Limit must be between 1 and 100, got {limit}",
-                details={"limit": limit}
+                details={"limit": limit},
             )
 
         if offset < 0:
             raise OrderDeskError(
                 code="INVALID_PARAMETER",
                 message=f"Offset must be >= 0, got {offset}",
-                details={"offset": offset}
+                details={"offset": offset},
             )
 
         # Build query parameters
-        params: dict[str, Any] = {
-            "limit": limit,
-            "offset": offset
-        }
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
 
         if folder_id is not None:
             params["folder_id"] = folder_id
@@ -552,7 +543,7 @@ class OrderDeskClient:
             # Unexpected format
             logger.warning(
                 "Unexpected OrderDesk response format",
-                response_type=type(response).__name__
+                response_type=type(response).__name__,
             )
             orders = []
 
@@ -567,7 +558,7 @@ class OrderDeskClient:
             "limit": limit,
             "offset": offset,
             "page": current_page,
-            "has_more": has_more
+            "has_more": has_more,
         }
 
     async def create_order(self, order_data: dict[str, Any]) -> dict[str, Any]:
@@ -597,7 +588,9 @@ class OrderDeskClient:
         """
         return await self.post("/orders", json=order_data)
 
-    async def update_order(self, order_id: str, order_data: dict[str, Any]) -> dict[str, Any]:
+    async def update_order(
+        self, order_id: str, order_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Update an order with full-object upload.
 
@@ -656,9 +649,7 @@ class OrderDeskClient:
         return await self.get_order(order_id)
 
     def merge_order_changes(
-        self,
-        original: dict[str, Any],
-        changes: dict[str, Any]
+        self, original: dict[str, Any], changes: dict[str, Any]
     ) -> dict[str, Any]:
         """
         Safely merge partial changes into full order object.
@@ -707,10 +698,7 @@ class OrderDeskClient:
         return merged
 
     async def update_order_with_retry(
-        self,
-        order_id: str,
-        changes: dict[str, Any],
-        max_retries: int = 5
+        self, order_id: str, changes: dict[str, Any], max_retries: int = 5
     ) -> dict[str, Any]:
         """
         Update order with automatic conflict resolution.
@@ -750,9 +738,7 @@ class OrderDeskClient:
                 updated_order = await self.update_order(order_id, merged_order)
 
                 logger.info(
-                    "Order updated successfully",
-                    order_id=order_id,
-                    attempt=attempt + 1
+                    "Order updated successfully", order_id=order_id, attempt=attempt + 1
                 )
 
                 return updated_order
@@ -764,11 +750,11 @@ class OrderDeskClient:
                         "Order update conflict, retrying",
                         order_id=order_id,
                         attempt=attempt + 1,
-                        max_retries=max_retries
+                        max_retries=max_retries,
                     )
 
                     # Exponential backoff: 0.5s, 1s, 2s, 4s, 8s
-                    backoff_delay = 0.5 * (2 ** attempt)
+                    backoff_delay = 0.5 * (2**attempt)
                     await self._backoff_fixed(backoff_delay)
                     continue
 
@@ -778,7 +764,7 @@ class OrderDeskClient:
         # Max retries exceeded
         raise ConflictError(
             f"Failed to update order {order_id} after {max_retries} attempts due to conflicts",
-            retries=max_retries
+            retries=max_retries,
         )
 
     async def _backoff_fixed(self, delay: float):
@@ -789,6 +775,7 @@ class OrderDeskClient:
             delay: Delay in seconds
         """
         import asyncio
+
         logger.info("Backing off before conflict retry", delay_seconds=delay)
         await asyncio.sleep(delay)
 
@@ -824,10 +811,7 @@ class OrderDeskClient:
         return await self.get(f"/inventory/{product_id}")
 
     async def list_products(
-        self,
-        limit: int = 50,
-        offset: int = 0,
-        search: str | None = None
+        self, limit: int = 50, offset: int = 0, search: str | None = None
     ) -> dict[str, Any]:
         """
         List products with pagination and search.
@@ -873,21 +857,18 @@ class OrderDeskClient:
             raise OrderDeskError(
                 code="INVALID_PARAMETER",
                 message=f"Limit must be between 1 and 100, got {limit}",
-                details={"limit": limit}
+                details={"limit": limit},
             )
 
         if offset < 0:
             raise OrderDeskError(
                 code="INVALID_PARAMETER",
                 message=f"Offset must be >= 0, got {offset}",
-                details={"offset": offset}
+                details={"offset": offset},
             )
 
         # Build query parameters
-        params: dict[str, Any] = {
-            "limit": limit,
-            "offset": offset
-        }
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
 
         if search:
             params["search"] = search
@@ -907,7 +888,7 @@ class OrderDeskClient:
         else:
             logger.warning(
                 "Unexpected OrderDesk response format for products",
-                response_type=type(response).__name__
+                response_type=type(response).__name__,
             )
             products = []
 
@@ -922,6 +903,5 @@ class OrderDeskClient:
             "limit": limit,
             "offset": offset,
             "page": current_page,
-            "has_more": has_more
+            "has_more": has_more,
         }
-

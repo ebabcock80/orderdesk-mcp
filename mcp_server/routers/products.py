@@ -25,7 +25,9 @@ from mcp_server.utils.logging import logger
 router = APIRouter()
 
 
-async def get_orderdesk_client(request: Request, store_id: str, db: Session) -> OrderDeskClient:
+async def get_orderdesk_client(
+    request: Request, store_id: str, db: Session
+) -> OrderDeskClient:
     """Get OrderDesk client for the specified store."""
     tenant_id = request.state.tenant_id
     store_service = StoreService(db)
@@ -47,7 +49,9 @@ async def get_orderdesk_client(request: Request, store_id: str, db: Session) -> 
         )
 
     # Get decrypted credentials
-    store_id_actual, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+    store_id_actual, api_key = await store_service.get_decrypted_credentials(
+        store, tenant_key
+    )
     return OrderDeskClient(store_id_actual, api_key)
 
 
@@ -83,7 +87,9 @@ async def list_inventory_items(
             query_params["search"] = search
 
         # Fetch from OrderDesk API
-        result = await client.list_inventory_items(params=query_params, tenant_id=tenant_id)
+        result = await client.list_inventory_items(
+            params=query_params, tenant_id=tenant_id
+        )
 
         # Cache the result
         await cache_manager.set(tenant_id, store_id, "inventory", result, params)
@@ -194,7 +200,9 @@ async def update_inventory_item(
         client = await get_orderdesk_client(request, store_id, db)
 
         # Update item via OrderDesk API
-        result = await client.update_inventory_item(item_id, item_data, tenant_id=tenant_id)
+        result = await client.update_inventory_item(
+            item_id, item_data, tenant_id=tenant_id
+        )
 
         # Invalidate cache for this store
         await cache_manager.invalidate_store(tenant_id, store_id)
@@ -253,44 +261,34 @@ async def delete_inventory_item(
 # MCP Tools - Product Operations
 # ============================================================================
 
+
 class GetProductParams(BaseModel):
     """Parameters for products.get tool."""
+
     product_id: str = Field(..., description="OrderDesk product/inventory item ID")
     store_identifier: str | None = Field(
-        None,
-        description="Store ID or name (optional if active store is set)"
+        None, description="Store ID or name (optional if active store is set)"
     )
 
     model_config = {
         "json_schema_extra": {
-            "example": {
-                "product_id": "product-123",
-                "store_identifier": "production"
-            }
+            "example": {"product_id": "product-123", "store_identifier": "production"}
         }
     }
 
 
 class ListProductsParams(BaseModel):
     """Parameters for products.list tool."""
+
     store_identifier: str | None = Field(
-        None,
-        description="Store ID or name (optional if active store is set)"
+        None, description="Store ID or name (optional if active store is set)"
     )
     limit: int = Field(
-        50,
-        ge=1,
-        le=100,
-        description="Number of products to return (1-100, default 50)"
+        50, ge=1, le=100, description="Number of products to return (1-100, default 50)"
     )
-    offset: int = Field(
-        0,
-        ge=0,
-        description="Number of products to skip (default 0)"
-    )
+    offset: int = Field(0, ge=0, description="Number of products to skip (default 0)")
     search: str | None = Field(
-        None,
-        description="Search query (searches name, SKU, description, category)"
+        None, description="Search query (searches name, SKU, description, category)"
     )
 
     model_config = {
@@ -299,7 +297,7 @@ class ListProductsParams(BaseModel):
                 "store_identifier": "production",
                 "limit": 50,
                 "offset": 0,
-                "search": "widget"
+                "search": "widget",
             }
         }
     }
@@ -307,7 +305,10 @@ class ListProductsParams(BaseModel):
 
 # MCP Tool Implementations
 
-async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db)) -> dict:
+
+async def get_product_mcp(
+    params: GetProductParams, db: Session = Depends(get_db)
+) -> dict:
     """
     Get a single product by ID.
 
@@ -346,13 +347,15 @@ async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db
 
         # Resolve store (by identifier or active store)
         if params.store_identifier:
-            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+            store = await store_service.resolve_store(
+                tenant_id, params.store_identifier
+            )
         else:
             context = get_context()
             if not context.active_store_id:
                 raise ValidationError(
                     "No store specified and no active store set. Use stores.use_store first or provide store_identifier.",
-                    missing_fields=["store_identifier"]
+                    missing_fields=["store_identifier"],
                 )
             store = await store_service.get_store(tenant_id, context.active_store_id)
 
@@ -360,7 +363,9 @@ async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db
             raise NotFoundError("Store", params.store_identifier or "active")
 
         # Get decrypted credentials
-        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        store_id, api_key = await store_service.get_decrypted_credentials(
+            store, tenant_key
+        )
 
         # Check cache first (60-second TTL for products)
         cache_key = f"products/{params.product_id}"
@@ -370,13 +375,9 @@ async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db
                 "Product fetched from cache",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
-                product_id=params.product_id
+                product_id=params.product_id,
             )
-            return {
-                "status": "success",
-                "product": cached,
-                "cached": True
-            }
+            return {"status": "success", "product": cached, "cached": True}
 
         # Create OrderDesk client
         async with OrderDeskClient(store_id, api_key) as client:
@@ -390,14 +391,10 @@ async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db
                 "Product fetched successfully",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
-                product_id=params.product_id
+                product_id=params.product_id,
             )
 
-            return {
-                "status": "success",
-                "product": product,
-                "cached": False
-            }
+            return {"status": "success", "product": product, "cached": False}
 
     except (NotFoundError, ValidationError):
         raise
@@ -410,7 +407,9 @@ async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db
         raise ValidationError(f"Failed to fetch product: {str(e)}")
 
 
-async def list_products_mcp(params: ListProductsParams, db: Session = Depends(get_db)) -> dict:
+async def list_products_mcp(
+    params: ListProductsParams, db: Session = Depends(get_db)
+) -> dict:
     """
     List products with pagination and search.
 
@@ -470,13 +469,15 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
 
         # Resolve store (by identifier or active store)
         if params.store_identifier:
-            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+            store = await store_service.resolve_store(
+                tenant_id, params.store_identifier
+            )
         else:
             context = get_context()
             if not context.active_store_id:
                 raise ValidationError(
                     "No store specified and no active store set. Use stores.use_store first or provide store_identifier.",
-                    missing_fields=["store_identifier"]
+                    missing_fields=["store_identifier"],
                 )
             store = await store_service.get_store(tenant_id, context.active_store_id)
 
@@ -484,7 +485,9 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
             raise NotFoundError("Store", params.store_identifier or "active")
 
         # Get decrypted credentials
-        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        store_id, api_key = await store_service.get_decrypted_credentials(
+            store, tenant_key
+        )
 
         # Build cache parameters
         cache_params = {
@@ -495,28 +498,28 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
             cache_params["search"] = params.search
 
         # Check cache first (60-second TTL for products)
-        cached = await cache_manager.get(tenant_id, store.store_id, "products", cache_params)
+        cached = await cache_manager.get(
+            tenant_id, store.store_id, "products", cache_params
+        )
         if cached:
             logger.info(
                 "Products fetched from cache",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
-                count=cached.get("count", 0)
+                count=cached.get("count", 0),
             )
             return {
                 "status": "success",
                 "products": cached.get("products", []),
                 "pagination": cached.get("pagination", {}),
-                "cached": True
+                "cached": True,
             }
 
         # Create OrderDesk client
         async with OrderDeskClient(store_id, api_key) as client:
             # Fetch products
             response = await client.list_products(
-                limit=params.limit,
-                offset=params.offset,
-                search=params.search
+                limit=params.limit, offset=params.offset, search=params.search
             )
 
             # Prepare response
@@ -527,26 +530,24 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
                     "limit": response["limit"],
                     "offset": response["offset"],
                     "page": response["page"],
-                    "has_more": response["has_more"]
-                }
+                    "has_more": response["has_more"],
+                },
             }
 
             # Cache the result (60 seconds TTL for products - longer than orders)
-            await cache_manager.set(tenant_id, store.store_id, "products", result, cache_params)
+            await cache_manager.set(
+                tenant_id, store.store_id, "products", result, cache_params
+            )
 
             logger.info(
                 "Products listed successfully",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
                 count=response["count"],
-                page=response["page"]
+                page=response["page"],
             )
 
-            return {
-                "status": "success",
-                **result,
-                "cached": False
-            }
+            return {"status": "success", **result, "cached": False}
 
     except (NotFoundError, ValidationError):
         raise
@@ -566,11 +567,11 @@ MCP_TOOLS = {
     "products.get": {
         "function": get_product_mcp,
         "params_schema": GetProductParams,
-        "description": "Fetch a single product by ID with complete details (cached 60s)"
+        "description": "Fetch a single product by ID with complete details (cached 60s)",
     },
     "products.list": {
         "function": list_products_mcp,
         "params_schema": ListProductsParams,
-        "description": "List products with pagination and search (cached 60s)"
-    }
+        "description": "List products with pagination and search (cached 60s)",
+    },
 }

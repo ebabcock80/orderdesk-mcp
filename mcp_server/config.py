@@ -14,8 +14,13 @@ class Settings(BaseSettings):
     # =========================================================================
     # Server Configuration
     # =========================================================================
-    port: int = Field(default=8080, ge=1024, le=65535, description="Port to bind the server to")
-    trust_proxy: bool = Field(default=False, description="Trust proxy headers (X-Forwarded-For, CF-Connecting-IP)")
+    port: int = Field(
+        default=8080, ge=1024, le=65535, description="Port to bind the server to"
+    )
+    trust_proxy: bool = Field(
+        default=False,
+        description="Trust proxy headers (X-Forwarded-For, CF-Connecting-IP)",
+    )
     log_level: str = Field(default="INFO", description="Logging level")
 
     # Security
@@ -60,61 +65,109 @@ class Settings(BaseSettings):
     # =========================================================================
     # Cache Configuration
     # =========================================================================
-    cache_ttl_orders: int = Field(default=15, description="Cache TTL for orders (seconds)")
-    cache_ttl_products: int = Field(default=60, description="Cache TTL for products (seconds)")
-    cache_ttl_customers: int = Field(default=60, description="Cache TTL for customers (seconds)")
-    cache_ttl_store_settings: int = Field(default=300, description="Cache TTL for store settings (seconds)")
+    cache_ttl_orders: int = Field(
+        default=15, description="Cache TTL for orders (seconds)"
+    )
+    cache_ttl_products: int = Field(
+        default=60, description="Cache TTL for products (seconds)"
+    )
+    cache_ttl_customers: int = Field(
+        default=60, description="Cache TTL for customers (seconds)"
+    )
+    cache_ttl_store_settings: int = Field(
+        default=300, description="Cache TTL for store settings (seconds)"
+    )
 
     # =========================================================================
     # Resilience Configuration
     # =========================================================================
     http_timeout: int = Field(default=30, description="HTTP client timeout (seconds)")
-    http_max_retries: int = Field(default=3, description="Max retries for HTTP 429/5xx errors")
-    mutation_max_retries: int = Field(default=5, description="Max retries for mutation conflicts")
+    http_max_retries: int = Field(
+        default=3, description="Max retries for HTTP 429/5xx errors"
+    )
+    mutation_max_retries: int = Field(
+        default=5, description="Max retries for mutation conflicts"
+    )
 
     # =========================================================================
     # WebUI Configuration (Optional - disabled by default)
     # =========================================================================
-    enable_webui: bool = Field(default=False, description="Enable optional web interface")
-    enable_public_signup: bool = Field(default=False, description="Allow public user registration")
+    enable_webui: bool = Field(
+        default=False, description="Enable optional web interface"
+    )
+    enable_public_signup: bool = Field(
+        default=False, description="Allow public user registration"
+    )
 
     # WebUI Authentication
-    jwt_secret_key: str | None = Field(default=None, description="JWT signing key (required if enable_webui=true)")
-    session_timeout: int = Field(default=86400, description="Session timeout in seconds (24 hours)")
-    magic_link_expiry: int = Field(default=900, description="Magic link expiry in seconds (15 minutes)")
+    jwt_secret_key: str | None = Field(
+        default=None, description="JWT signing key (required if enable_webui=true)"
+    )
+    session_timeout: int = Field(
+        default=86400, description="Session timeout in seconds (24 hours)"
+    )
+    magic_link_expiry: int = Field(
+        default=900, description="Magic link expiry in seconds (15 minutes)"
+    )
 
     # Session Cookie Configuration
-    session_cookie_name: str = Field(default="orderdesk_session", description="Session cookie name")
-    session_cookie_secure: bool = Field(default=True, description="Require HTTPS for cookies")
-    session_cookie_httponly: bool = Field(default=True, description="HttpOnly flag for cookies")
-    session_cookie_samesite: str = Field(default="Strict", description="SameSite cookie attribute")
+    session_cookie_name: str = Field(
+        default="orderdesk_session", description="Session cookie name"
+    )
+    session_cookie_secure: bool = Field(
+        default=True, description="Require HTTPS for cookies"
+    )
+    session_cookie_httponly: bool = Field(
+        default=True, description="HttpOnly flag for cookies"
+    )
+    session_cookie_samesite: str = Field(
+        default="Strict", description="SameSite cookie attribute"
+    )
 
     # Email Configuration
-    require_email_verification: bool = Field(default=False, description="Require email verification on signup")
+    require_email_verification: bool = Field(
+        default=False, description="Require email verification on signup"
+    )
     smtp_host: str | None = Field(default=None, description="SMTP server host")
     smtp_port: int = Field(default=587, description="SMTP server port")
     smtp_user: str | None = Field(default=None, description="SMTP username")
     smtp_password: str | None = Field(default=None, description="SMTP password")
-    smtp_from: str = Field(default="OrderDesk MCP <noreply@example.com>", description="From email address")
+    smtp_from: str = Field(
+        default="OrderDesk MCP <noreply@example.com>", description="From email address"
+    )
     smtp_tls: bool = Field(default=True, description="Use TLS for SMTP")
 
     # WebUI Rate Limiting
-    webui_rate_limit_login: int = Field(default=5, description="Login attempts per IP per minute")
-    webui_rate_limit_signup: int = Field(default=2, description="Signup attempts per IP per minute")
-    webui_rate_limit_api_console: int = Field(default=30, description="API console requests per user per minute")
+    webui_rate_limit_login: int = Field(
+        default=5, description="Login attempts per IP per minute"
+    )
+    webui_rate_limit_signup: int = Field(
+        default=2, description="Signup attempts per IP per minute"
+    )
+    webui_rate_limit_api_console: int = Field(
+        default=30, description="API console requests per user per minute"
+    )
 
     # CSRF Configuration
-    csrf_secret_key: str | None = Field(default=None, description="CSRF token secret (auto-generated if omitted)")
+    csrf_secret_key: str | None = Field(
+        default=None, description="CSRF token secret (auto-generated if omitted)"
+    )
 
     # WebUI Features
-    enable_trace_viewer: bool = Field(default=True, description="Enable trace/logs viewer in UI")
+    enable_trace_viewer: bool = Field(
+        default=True, description="Enable trace/logs viewer in UI"
+    )
     enable_audit_log: bool = Field(default=True, description="Enable audit logging")
-    audit_log_retention_days: int = Field(default=90, description="Audit log retention period (days)")
+    audit_log_retention_days: int = Field(
+        default=90, description="Audit log retention period (days)"
+    )
 
     # =========================================================================
     # Testing Configuration
     # =========================================================================
-    orderdesk_test_enabled: bool = Field(default=False, description="Enable integration tests")
+    orderdesk_test_enabled: bool = Field(
+        default=False, description="Enable integration tests"
+    )
     orderdesk_test_store_id: str | None = Field(
         default=None, description="Test store ID for integration tests"
     )
@@ -125,8 +178,12 @@ class Settings(BaseSettings):
     # =========================================================================
     # Advanced Configuration
     # =========================================================================
-    enable_metrics: bool = Field(default=True, description="Enable Prometheus metrics endpoint")
-    enable_detailed_health: bool = Field(default=True, description="Enable detailed health check endpoint")
+    enable_metrics: bool = Field(
+        default=True, description="Enable Prometheus metrics endpoint"
+    )
+    enable_detailed_health: bool = Field(
+        default=True, description="Enable detailed health check endpoint"
+    )
 
     @field_validator("mcp_kms_key")
     @classmethod

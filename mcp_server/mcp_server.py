@@ -30,20 +30,12 @@ async def handle_list_tools() -> list[types.Tool]:
         types.Tool(
             name="health_check",
             description="Check the health status of the OrderDesk server",
-            inputSchema={
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
+            inputSchema={"type": "object", "properties": {}, "required": []},
         ),
         types.Tool(
             name="list_stores",
             description="List all stores (simplified - no tenant system)",
-            inputSchema={
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
+            inputSchema={"type": "object", "properties": {}, "required": []},
         ),
         types.Tool(
             name="create_store",
@@ -53,19 +45,19 @@ async def handle_list_tools() -> list[types.Tool]:
                 "properties": {
                     "store_id": {
                         "type": "string",
-                        "description": "Unique identifier for the store"
+                        "description": "Unique identifier for the store",
                     },
                     "api_key": {
                         "type": "string",
-                        "description": "OrderDesk API key for the store"
+                        "description": "OrderDesk API key for the store",
                     },
                     "name": {
                         "type": "string",
-                        "description": "Display name for the store"
-                    }
+                        "description": "Display name for the store",
+                    },
                 },
-                "required": ["store_id", "api_key", "name"]
-            }
+                "required": ["store_id", "api_key", "name"],
+            },
         ),
         types.Tool(
             name="delete_store",
@@ -75,15 +67,15 @@ async def handle_list_tools() -> list[types.Tool]:
                 "properties": {
                     "store_id": {
                         "type": "string",
-                        "description": "ID of the store to delete"
+                        "description": "ID of the store to delete",
                     },
                     "api_key": {
                         "type": "string",
-                        "description": "OrderDesk API key for the store"
-                    }
+                        "description": "OrderDesk API key for the store",
+                    },
                 },
-                "required": ["store_id", "api_key"]
-            }
+                "required": ["store_id", "api_key"],
+            },
         ),
         types.Tool(
             name="list_orders",
@@ -91,31 +83,28 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
                     "limit": {
                         "type": "integer",
                         "description": "Maximum number of orders to return",
-                        "default": 50
+                        "default": 50,
                     },
                     "offset": {
                         "type": "integer",
                         "description": "Number of orders to skip",
-                        "default": 0
+                        "default": 0,
                     },
                     "status": {
                         "type": "string",
-                        "description": "Filter by order status"
+                        "description": "Filter by order status",
                     },
                     "folder_id": {
                         "type": "string",
-                        "description": "Filter by folder ID"
-                    }
+                        "description": "Filter by folder ID",
+                    },
                 },
-                "required": ["store_id", "api_key"]
-            }
+                "required": ["store_id", "api_key"],
+            },
         ),
         types.Tool(
             name="get_order",
@@ -123,17 +112,11 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
-                    "order_id": {
-                        "type": "string",
-                        "description": "ID of the order"
-                    }
+                    "store_id": {"type": "string", "description": "ID of the store"},
+                    "order_id": {"type": "string", "description": "ID of the order"},
                 },
-                "required": ["store_id", "api_key", "order_id"]
-            }
+                "required": ["store_id", "api_key", "order_id"],
+            },
         ),
         types.Tool(
             name="create_order",
@@ -141,17 +124,14 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
                     "order_data": {
                         "type": "object",
-                        "description": "Order data to create"
-                    }
+                        "description": "Order data to create",
+                    },
                 },
-                "required": ["store_id", "api_key", "order_data"]
-            }
+                "required": ["store_id", "api_key", "order_data"],
+            },
         ),
         types.Tool(
             name="update_order",
@@ -159,21 +139,15 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
-                    "order_id": {
-                        "type": "string",
-                        "description": "ID of the order"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
+                    "order_id": {"type": "string", "description": "ID of the order"},
                     "order_data": {
                         "type": "object",
-                        "description": "Updated order data"
-                    }
+                        "description": "Updated order data",
+                    },
                 },
-                "required": ["store_id", "api_key", "order_id", "order_data"]
-            }
+                "required": ["store_id", "api_key", "order_id", "order_data"],
+            },
         ),
         types.Tool(
             name="delete_order",
@@ -181,17 +155,11 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
-                    "order_id": {
-                        "type": "string",
-                        "description": "ID of the order"
-                    }
+                    "store_id": {"type": "string", "description": "ID of the store"},
+                    "order_id": {"type": "string", "description": "ID of the order"},
                 },
-                "required": ["store_id", "api_key", "order_id"]
-            }
+                "required": ["store_id", "api_key", "order_id"],
+            },
         ),
         types.Tool(
             name="mutate_order",
@@ -199,21 +167,15 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
-                    "order_id": {
-                        "type": "string",
-                        "description": "ID of the order"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
+                    "order_id": {"type": "string", "description": "ID of the order"},
                     "mutator": {
                         "type": "string",
-                        "description": "Description of the mutation to perform"
-                    }
+                        "description": "Description of the mutation to perform",
+                    },
                 },
-                "required": ["store_id", "api_key", "order_id", "mutator"]
-            }
+                "required": ["store_id", "api_key", "order_id", "mutator"],
+            },
         ),
         types.Tool(
             name="list_products",
@@ -221,27 +183,24 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
                     "limit": {
                         "type": "integer",
                         "description": "Maximum number of products to return",
-                        "default": 50
+                        "default": 50,
                     },
                     "offset": {
                         "type": "integer",
                         "description": "Number of products to skip",
-                        "default": 0
+                        "default": 0,
                     },
                     "search": {
                         "type": "string",
-                        "description": "Search term for products"
-                    }
+                        "description": "Search term for products",
+                    },
                 },
-                "required": ["store_id", "api_key"]
-            }
+                "required": ["store_id", "api_key"],
+            },
         ),
         types.Tool(
             name="get_product",
@@ -249,17 +208,14 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
                     "product_id": {
                         "type": "string",
-                        "description": "ID of the product"
-                    }
+                        "description": "ID of the product",
+                    },
                 },
-                "required": ["store_id", "api_key", "product_id"]
-            }
+                "required": ["store_id", "api_key", "product_id"],
+            },
         ),
         types.Tool(
             name="list_customers",
@@ -267,27 +223,24 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
                     "limit": {
                         "type": "integer",
                         "description": "Maximum number of customers to return",
-                        "default": 50
+                        "default": 50,
                     },
                     "offset": {
                         "type": "integer",
                         "description": "Number of customers to skip",
-                        "default": 0
+                        "default": 0,
                     },
                     "search": {
                         "type": "string",
-                        "description": "Search term for customers"
-                    }
+                        "description": "Search term for customers",
+                    },
                 },
-                "required": ["store_id", "api_key"]
-            }
+                "required": ["store_id", "api_key"],
+            },
         ),
         types.Tool(
             name="get_customer",
@@ -295,17 +248,14 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
                     "customer_id": {
                         "type": "string",
-                        "description": "ID of the customer"
-                    }
+                        "description": "ID of the customer",
+                    },
                 },
-                "required": ["store_id", "api_key", "customer_id"]
-            }
+                "required": ["store_id", "api_key", "customer_id"],
+            },
         ),
         types.Tool(
             name="list_folders",
@@ -313,17 +263,14 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
                     "api_key": {
                         "type": "string",
-                        "description": "OrderDesk API key for the store"
-                    }
+                        "description": "OrderDesk API key for the store",
+                    },
                 },
-                "required": ["store_id", "api_key"]
-            }
+                "required": ["store_id", "api_key"],
+            },
         ),
         types.Tool(
             name="create_folder",
@@ -331,21 +278,15 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
-                    "name": {
-                        "type": "string",
-                        "description": "Name of the folder"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
+                    "name": {"type": "string", "description": "Name of the folder"},
                     "description": {
                         "type": "string",
-                        "description": "Description of the folder"
-                    }
+                        "description": "Description of the folder",
+                    },
                 },
-                "required": ["store_id", "api_key", "name"]
-            }
+                "required": ["store_id", "api_key", "name"],
+            },
         ),
         types.Tool(
             name="list_webhooks",
@@ -353,13 +294,10 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    }
+                    "store_id": {"type": "string", "description": "ID of the store"}
                 },
-                "required": ["store_id", "api_key"]
-            }
+                "required": ["store_id", "api_key"],
+            },
         ),
         types.Tool(
             name="create_webhook",
@@ -367,26 +305,20 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
-                    "url": {
-                        "type": "string",
-                        "description": "Webhook URL"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
+                    "url": {"type": "string", "description": "Webhook URL"},
                     "events": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Events to listen for"
+                        "description": "Events to listen for",
                     },
                     "secret": {
                         "type": "string",
-                        "description": "Webhook secret for validation"
-                    }
+                        "description": "Webhook secret for validation",
+                    },
                 },
-                "required": ["store_id", "api_key", "url", "events"]
-            }
+                "required": ["store_id", "api_key", "url", "events"],
+            },
         ),
         types.Tool(
             name="get_reports",
@@ -394,31 +326,30 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "store_id": {
-                        "type": "string",
-                        "description": "ID of the store"
-                    },
+                    "store_id": {"type": "string", "description": "ID of the store"},
                     "type": {
                         "type": "string",
-                        "description": "Type of report to generate"
+                        "description": "Type of report to generate",
                     },
                     "start_date": {
                         "type": "string",
-                        "description": "Start date for the report (YYYY-MM-DD)"
+                        "description": "Start date for the report (YYYY-MM-DD)",
                     },
                     "end_date": {
                         "type": "string",
-                        "description": "End date for the report (YYYY-MM-DD)"
-                    }
+                        "description": "End date for the report (YYYY-MM-DD)",
+                    },
                 },
-                "required": ["store_id", "api_key"]
-            }
-        )
+                "required": ["store_id", "api_key"],
+            },
+        ),
     ]
 
 
 @server.call_tool()
-async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
+async def handle_call_tool(
+    name: str, arguments: dict[str, Any]
+) -> list[types.TextContent]:
     """Handle tool calls."""
     try:
         logger.info(f"Tool called: {name} with arguments: {arguments}")
@@ -431,14 +362,15 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.T
 
         elif name == "list_stores":
             # For now, return a simple response since we don't have a tenant system
-            result = {"stores": [], "message": "No tenant system - use create_store to add a store"}
+            result = {
+                "stores": [],
+                "message": "No tenant system - use create_store to add a store",
+            }
 
         elif name == "create_store":
             # Store the store credentials directly without tenant system
             result = await orderdesk_service.create_store_simple(
-                arguments["store_id"],
-                arguments["api_key"],
-                arguments["name"]
+                arguments["store_id"], arguments["api_key"], arguments["name"]
             )
 
         elif name == "delete_store":
@@ -451,21 +383,17 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.T
                 limit=arguments.get("limit", 50),
                 offset=arguments.get("offset", 0),
                 status=arguments.get("status"),
-                folder_id=arguments.get("folder_id")
+                folder_id=arguments.get("folder_id"),
             )
 
         elif name == "get_order":
             result = await orderdesk_service.get_order_direct(
-                arguments["store_id"],
-                arguments["api_key"],
-                arguments["order_id"]
+                arguments["store_id"], arguments["api_key"], arguments["order_id"]
             )
 
         elif name == "create_order":
             result = await orderdesk_service.create_order_direct(
-                arguments["store_id"],
-                arguments["api_key"],
-                arguments["order_data"]
+                arguments["store_id"], arguments["api_key"], arguments["order_data"]
             )
 
         elif name == "update_order":
@@ -473,14 +401,12 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.T
                 arguments["store_id"],
                 arguments["api_key"],
                 arguments["order_id"],
-                arguments["order_data"]
+                arguments["order_data"],
             )
 
         elif name == "delete_order":
             result = await orderdesk_service.delete_order_direct(
-                arguments["store_id"],
-                arguments["api_key"],
-                arguments["order_id"]
+                arguments["store_id"], arguments["api_key"], arguments["order_id"]
             )
 
         elif name == "mutate_order":
@@ -488,7 +414,7 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.T
                 arguments["store_id"],
                 arguments["api_key"],
                 arguments["order_id"],
-                arguments["mutator"]
+                arguments["mutator"],
             )
 
         elif name == "list_products":
@@ -497,14 +423,12 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.T
                 arguments["api_key"],
                 search=arguments.get("search"),
                 limit=arguments.get("limit", 50),
-                offset=arguments.get("offset", 0)
+                offset=arguments.get("offset", 0),
             )
 
         elif name == "get_product":
             result = await orderdesk_service.get_product_direct(
-                arguments["store_id"],
-                arguments["api_key"],
-                arguments["product_id"]
+                arguments["store_id"], arguments["api_key"], arguments["product_id"]
             )
 
         elif name == "list_customers":
@@ -513,20 +437,17 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.T
                 arguments["api_key"],
                 search=arguments.get("search"),
                 limit=arguments.get("limit", 50),
-                offset=arguments.get("offset", 0)
+                offset=arguments.get("offset", 0),
             )
 
         elif name == "get_customer":
             result = await orderdesk_service.get_customer_direct(
-                arguments["store_id"],
-                arguments["api_key"],
-                arguments["customer_id"]
+                arguments["store_id"], arguments["api_key"], arguments["customer_id"]
             )
 
         elif name == "list_folders":
             result = await orderdesk_service.list_folders_direct(
-                arguments["store_id"],
-                arguments["api_key"]
+                arguments["store_id"], arguments["api_key"]
             )
 
         elif name == "create_folder":
@@ -534,13 +455,12 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.T
                 arguments["store_id"],
                 arguments["api_key"],
                 arguments["name"],
-                arguments.get("description")
+                arguments.get("description"),
             )
 
         elif name == "list_webhooks":
             result = await orderdesk_service.list_webhooks_direct(
-                arguments["store_id"],
-                arguments["api_key"]
+                arguments["store_id"], arguments["api_key"]
             )
 
         elif name == "create_webhook":
@@ -549,7 +469,7 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.T
                 arguments["api_key"],
                 arguments["url"],
                 arguments["events"],
-                arguments.get("secret")
+                arguments.get("secret"),
             )
 
         elif name == "get_reports":
@@ -558,18 +478,24 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[types.T
                 arguments["api_key"],
                 arguments.get("type"),
                 arguments.get("start_date"),
-                arguments.get("end_date")
+                arguments.get("end_date"),
             )
 
         else:
             result = {"error": f"Unknown tool: {name}"}
 
         # Return plain JSON string that Claude can parse
-        return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+        return [
+            types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False))
+        ]
 
     except Exception as e:
         logger.error(f"Error calling tool {name}: {str(e)}")
-        return [types.TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False))]
+        return [
+            types.TextContent(
+                type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False)
+            )
+        ]
 
 
 async def main():
@@ -579,6 +505,7 @@ async def main():
     # Initialize database tables
     try:
         from mcp_server.models.database import create_tables
+
         create_tables()
         logger.info("Database tables created successfully")
     except Exception as e:

@@ -1,6 +1,5 @@
 """Authentication middleware for master key validation."""
 
-
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -26,7 +25,9 @@ async def get_tenant_from_master_key(
     # Try to find existing tenant
     crypto_manager = get_crypto_manager()
     for tenant in db.query(Tenant).all():
-        if crypto_manager.verify_master_key(master_key, tenant.master_key_hash, tenant.salt):
+        if crypto_manager.verify_master_key(
+            master_key, tenant.master_key_hash, tenant.salt
+        ):
             return tenant
 
     # Auto-provision new tenant if enabled
@@ -60,7 +61,9 @@ async def authenticate_request(request: Request) -> Tenant:
     try:
         # Get tenant from master key
         tenant = await get_tenant_from_master_key(
-            master_key, db, auto_provision=request.app.state.settings.auto_provision_tenant
+            master_key,
+            db,
+            auto_provision=request.app.state.settings.auto_provision_tenant,
         )
         if not tenant:
             raise AuthError("Invalid master key")

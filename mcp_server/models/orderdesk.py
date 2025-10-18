@@ -116,7 +116,9 @@ class AddItemsRequest(BaseModel):
 class UpdateAddressRequest(BaseModel):
     """Update order address request."""
 
-    address_type: str = Field(..., description="Type of address: shipping, customer, or return")
+    address_type: str = Field(
+        ..., description="Type of address: shipping, customer, or return"
+    )
     address: Address = Field(..., description="New address data")
 
 

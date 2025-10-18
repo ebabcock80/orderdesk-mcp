@@ -21,8 +21,7 @@ from typing import Optional
 
 # Session context for MCP requests
 _session_context: ContextVar[Optional["SessionContext"]] = ContextVar(
-    'session_context',
-    default=None
+    "session_context", default=None
 )
 
 
@@ -49,6 +48,7 @@ class SessionContext:
 # ============================================================================
 # Context Management Functions
 # ============================================================================
+
 
 def get_context() -> SessionContext:
     """
@@ -94,6 +94,7 @@ def set_tenant(tenant_id: str, tenant_key: bytes) -> None:
 
     # Update logging context
     from mcp_server.utils.logging import correlation_id_var, tenant_id_var
+
     tenant_id_var.set(tenant_id)
     correlation_id_var.set(ctx.correlation_id)
 
@@ -113,6 +114,7 @@ def set_active_store(store_id: str) -> None:
 
     # Update logging context
     from mcp_server.utils.logging import store_id_var
+
     store_id_var.set(store_id)
 
 
@@ -170,7 +172,7 @@ def new_correlation_id() -> str:
 
     # Update logging context
     from mcp_server.utils.logging import correlation_id_var
+
     correlation_id_var.set(ctx.correlation_id)
 
     return ctx.correlation_id
-

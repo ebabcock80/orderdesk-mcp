@@ -14,9 +14,9 @@ def get_real_client_ip(request: Request) -> str:
     # Check various proxy headers in order of preference
     headers_to_check = [
         "CF-Connecting-IP",  # Cloudflare
-        "X-Forwarded-For",   # Standard proxy header
-        "X-Real-IP",         # Nginx
-        "X-Client-IP",       # Apache
+        "X-Forwarded-For",  # Standard proxy header
+        "X-Real-IP",  # Nginx
+        "X-Client-IP",  # Apache
     ]
 
     for header in headers_to_check:

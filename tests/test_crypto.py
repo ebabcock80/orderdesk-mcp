@@ -152,6 +152,7 @@ class TestCryptoManager:
     def test_initialization(self):
         """CryptoManager should initialize with valid KMS key."""
         import base64
+
         kms_key = base64.urlsafe_b64encode(b"a" * 32).decode()
 
         manager = CryptoManager(kms_key)
@@ -160,6 +161,7 @@ class TestCryptoManager:
     def test_initialization_fails_short_key(self):
         """CryptoManager should reject short KMS keys."""
         import base64
+
         short_key = base64.urlsafe_b64encode(b"short").decode()
 
         with pytest.raises(ValueError, match="at least 32 bytes"):
@@ -168,6 +170,7 @@ class TestCryptoManager:
     def test_generate_salt(self):
         """Generated salts should be unique."""
         import base64
+
         kms_key = base64.urlsafe_b64encode(b"a" * 32).decode()
         manager = CryptoManager(kms_key)
 
@@ -180,6 +183,7 @@ class TestCryptoManager:
     def test_generate_master_key(self):
         """Generated master keys should be secure."""
         import base64
+
         kms_key = base64.urlsafe_b64encode(b"a" * 32).decode()
         manager = CryptoManager(kms_key)
 
@@ -219,4 +223,3 @@ class TestHelperFunctions:
 
 
 # Coverage target: >90% (critical security code)
-

@@ -12,7 +12,6 @@ MCP Tools:
 - stores.resolve - Resolve store by ID or name (debug tool)
 """
 
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -35,7 +34,9 @@ from mcp_server.utils.logging import logger
 router = APIRouter()
 
 
-@router.post("/stores", response_model=StoreResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/stores", response_model=StoreResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_store(
     store_data: StoreCreateRequest,
     request: Request,
@@ -112,20 +113,18 @@ async def delete_store(
 # MCP Tools - Tenant & Store Management
 # ============================================================================
 
+
 class UseMasterKeyParams(BaseModel):
     """Parameters for tenant.use_master_key tool."""
+
     master_key: str = Field(
         ...,
         description="Your master key (min 16 chars). Keep this secret!",
-        min_length=16
+        min_length=16,
     )
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "master_key": "your-32-char-master-key-here"
-            }
-        }
+        json_schema_extra = {"example": {"master_key": "your-32-char-master-key-here"}}
 
 
 class RegisterStoreParams(BaseModel):
@@ -135,10 +134,15 @@ class RegisterStoreParams(BaseModel):
     Maps to: Store registration in database with encrypted credentials.
     Docs: See speckit.specify for store management details.
     """
+
     store_id: str = Field(..., description="OrderDesk store ID from Settings > API")
     api_key: str = Field(..., description="OrderDesk API key from Settings > API")
-    store_name: str | None = Field(None, description="Friendly name for lookup (defaults to store_id)")
-    label: str | None = Field(None, description="Optional label (e.g., 'Production', 'Staging')")
+    store_name: str | None = Field(
+        None, description="Friendly name for lookup (defaults to store_id)"
+    )
+    label: str | None = Field(
+        None, description="Optional label (e.g., 'Production', 'Staging')"
+    )
 
     class Config:
         json_schema_extra = {
@@ -146,37 +150,40 @@ class RegisterStoreParams(BaseModel):
                 "store_id": "12345",
                 "api_key": "your-orderdesk-api-key",
                 "store_name": "my-production-store",
-                "label": "Production"
+                "label": "Production",
             }
         }
 
 
 class UseStoreParams(BaseModel):
     """Parameters for stores.use_store tool."""
+
     identifier: str = Field(..., description="Store ID or store name")
 
     class Config:
         json_schema_extra = {
-            "examples": [
-                {"identifier": "12345"},
-                {"identifier": "my-production-store"}
-            ]
+            "examples": [{"identifier": "12345"}, {"identifier": "my-production-store"}]
         }
 
 
 class DeleteStoreParams(BaseModel):
     """Parameters for stores.delete tool."""
+
     store_id: str = Field(..., description="Store ID to delete")
 
 
 class ResolveStoreParams(BaseModel):
     """Parameters for stores.resolve tool."""
+
     identifier: str = Field(..., description="Store ID or store name to resolve")
 
 
 # MCP Tool Implementations
 
-async def use_master_key(params: UseMasterKeyParams, db: Session = Depends(get_db)) -> dict:
+
+async def use_master_key(
+    params: UseMasterKeyParams, db: Session = Depends(get_db)
+) -> dict:
     """
     Authenticate tenant and establish session.
 
@@ -204,8 +211,7 @@ async def use_master_key(params: UseMasterKeyParams, db: Session = Depends(get_d
 
         # Authenticate or create tenant (if auto-provision enabled)
         tenant = tenant_service.authenticate_or_create(
-            master_key=params.master_key,
-            auto_provision=settings.auto_provision_tenant
+            master_key=params.master_key, auto_provision=settings.auto_provision_tenant
         )
 
         if not tenant:
@@ -226,7 +232,7 @@ async def use_master_key(params: UseMasterKeyParams, db: Session = Depends(get_d
             "status": "success",
             "tenant_id": tenant.id,
             "stores_count": len(stores),
-            "message": f"Authenticated successfully. {len(stores)} stores registered."
+            "message": f"Authenticated successfully. {len(stores)} stores registered.",
         }
 
     except AuthError:
@@ -236,7 +242,9 @@ async def use_master_key(params: UseMasterKeyParams, db: Session = Depends(get_d
         raise AuthError(f"Authentication failed: {str(e)}")
 
 
-async def register_store(params: RegisterStoreParams, db: Session = Depends(get_db)) -> dict:
+async def register_store(
+    params: RegisterStoreParams, db: Session = Depends(get_db)
+) -> dict:
     """
     Register OrderDesk store with encrypted credentials.
 
@@ -273,7 +281,7 @@ async def register_store(params: RegisterStoreParams, db: Session = Depends(get_
             api_key=params.api_key,
             store_name=params.store_name,
             label=params.label,
-            tenant_key=tenant_key
+            tenant_key=tenant_key,
         )
 
         return {
@@ -281,7 +289,7 @@ async def register_store(params: RegisterStoreParams, db: Session = Depends(get_
             "store_id": store.store_id,
             "store_name": store.store_name,
             "label": store.label,
-            "message": f"Store '{store.store_name}' registered successfully"
+            "message": f"Store '{store.store_name}' registered successfully",
         }
 
     except (ValidationError, NotFoundError) as e:
@@ -327,11 +335,11 @@ async def list_stores_mcp(db: Session = Depends(get_db)) -> dict:
                     "store_id": s.store_id,
                     "store_name": s.store_name,
                     "label": s.label,
-                    "created_at": s.created_at.isoformat()
+                    "created_at": s.created_at.isoformat(),
                 }
                 for s in stores
             ],
-            "count": len(stores)
+            "count": len(stores),
         }
 
     except Exception as e:
@@ -377,14 +385,14 @@ async def use_store(params: UseStoreParams, db: Session = Depends(get_db)) -> di
             "Active store set",
             tenant_id=tenant_id,
             store_id=store.store_id,
-            store_name=store.store_name
+            store_name=store.store_name,
         )
 
         return {
             "status": "success",
             "store_id": store.store_id,
             "store_name": store.store_name,
-            "message": f"Active store set to '{store.store_name}'"
+            "message": f"Active store set to '{store.store_name}'",
         }
 
     except NotFoundError:
@@ -394,7 +402,9 @@ async def use_store(params: UseStoreParams, db: Session = Depends(get_db)) -> di
         raise ValidationError(f"Failed to set active store: {str(e)}")
 
 
-async def delete_store_mcp(params: DeleteStoreParams, db: Session = Depends(get_db)) -> dict:
+async def delete_store_mcp(
+    params: DeleteStoreParams, db: Session = Depends(get_db)
+) -> dict:
     """
     Delete store registration.
 
@@ -425,7 +435,7 @@ async def delete_store_mcp(params: DeleteStoreParams, db: Session = Depends(get_
 
         return {
             "status": "success",
-            "message": f"Store {params.store_id} deleted successfully"
+            "message": f"Store {params.store_id} deleted successfully",
         }
 
     except NotFoundError:
@@ -435,7 +445,9 @@ async def delete_store_mcp(params: DeleteStoreParams, db: Session = Depends(get_
         raise ValidationError(f"Failed to delete store: {str(e)}")
 
 
-async def resolve_store(params: ResolveStoreParams, db: Session = Depends(get_db)) -> dict:
+async def resolve_store(
+    params: ResolveStoreParams, db: Session = Depends(get_db)
+) -> dict:
     """
     Resolve store by ID or name (debug tool).
 
@@ -472,7 +484,9 @@ async def resolve_store(params: ResolveStoreParams, db: Session = Depends(get_db
             "store_id": store.store_id,
             "store_name": store.store_name,
             "label": store.label,
-            "resolved_by": "store_id" if params.identifier == store.store_id else "store_name"
+            "resolved_by": (
+                "store_id" if params.identifier == store.store_id else "store_name"
+            ),
         }
 
     except NotFoundError:
@@ -493,31 +507,31 @@ MCP_TOOLS = {
     "tenant.use_master_key": {
         "function": use_master_key,
         "params_schema": UseMasterKeyParams,
-        "description": "Authenticate tenant using master key and establish session"
+        "description": "Authenticate tenant using master key and establish session",
     },
     "stores.register": {
         "function": register_store,
         "params_schema": RegisterStoreParams,
-        "description": "Register OrderDesk store with encrypted credentials"
+        "description": "Register OrderDesk store with encrypted credentials",
     },
     "stores.list": {
         "function": list_stores_mcp,
         "params_schema": None,  # No parameters
-        "description": "List all stores for authenticated tenant"
+        "description": "List all stores for authenticated tenant",
     },
     "stores.use_store": {
         "function": use_store,
         "params_schema": UseStoreParams,
-        "description": "Set active store for session (subsequent tools will use this store)"
+        "description": "Set active store for session (subsequent tools will use this store)",
     },
     "stores.delete": {
         "function": delete_store_mcp,
         "params_schema": DeleteStoreParams,
-        "description": "Delete store registration (does not affect OrderDesk)"
+        "description": "Delete store registration (does not affect OrderDesk)",
     },
     "stores.resolve": {
         "function": resolve_store,
         "params_schema": ResolveStoreParams,
-        "description": "Resolve store by ID or name (debug tool)"
-    }
+        "description": "Resolve store by ID or name (debug tool)",
+    },
 }

@@ -112,7 +112,7 @@ class SqliteCacheBackend(CacheBackend):
 
         cursor.execute(
             "SELECT value FROM cache WHERE key = ? AND expires > ?",
-            (key, int(time.time()))
+            (key, int(time.time())),
         )
         result = cursor.fetchone()
         conn.close()
@@ -128,7 +128,7 @@ class SqliteCacheBackend(CacheBackend):
 
         cursor.execute(
             "INSERT OR REPLACE INTO cache (key, value, expires) VALUES (?, ?, ?)",
-            (key, json.dumps(value), int(time.time()) + ttl)
+            (key, json.dumps(value), int(time.time()) + ttl),
         )
         conn.commit()
         conn.close()
@@ -228,14 +228,19 @@ class CacheManager:
             return SqliteCacheBackend()
         elif backend_type == "redis":
             if redis is None:
-                logger.warning("redis_not_available", message="Redis not available, falling back to memory cache")
+                logger.warning(
+                    "redis_not_available",
+                    message="Redis not available, falling back to memory cache",
+                )
                 return MemoryCacheBackend()
             return RedisCacheBackend(settings.redis_url)
         else:
             logger.warning("unknown_cache_backend", backend=backend_type)
             return MemoryCacheBackend()
 
-    def _generate_key(self, tenant_id: str, store_id: str, endpoint: str, query_hash: str) -> str:
+    def _generate_key(
+        self, tenant_id: str, store_id: str, endpoint: str, query_hash: str
+    ) -> str:
         """Generate cache key."""
         return f"{tenant_id}:{store_id}:{endpoint}:{query_hash}"
 
