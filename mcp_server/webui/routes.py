@@ -251,15 +251,34 @@ async def add_store(
     """
     tenant_id = str(user["tenant_id"])
     store_service = StoreService(db)
+    
+    # Get tenant_key from session for encryption
+    tenant_key = user.get("tenant_key")
+    if not tenant_key:
+        logger.error("No tenant_key in session for store registration")
+        return get_templates().TemplateResponse(
+            "stores/add.html",
+            {
+                "request": request,
+                "user": user,
+                "csrf_token": generate_csrf_token(),
+                "error": "Session missing tenant_key. Please log out and log in again.",
+                "store_name": store_name,
+                "store_id": store_id,
+                "label": label,
+            },
+            status_code=400,
+        )
 
     try:
-        # Register store
+        # Register store with REAL tenant_key from session
         await store_service.register_store(
             tenant_id=tenant_id,
             store_id=store_id,
             api_key=api_key,
             store_name=store_name,
             label=label,
+            tenant_key=tenant_key,  # CRITICAL: Pass real tenant_key for encryption
         )
 
         logger.info(
@@ -447,19 +466,17 @@ async def edit_store(
             store.store_id = store_id_new
 
         if api_key and api_key.strip():
-            # Re-encrypt API key
-            from mcp_server.auth.crypto import get_crypto_manager
-            from mcp_server.models.database import Tenant
+            # Re-encrypt API key with tenant_key from session
+            tenant_key = user.get("tenant_key")
+            if not tenant_key:
+                raise ValueError("No tenant_key in session - cannot encrypt API key")
+            
+            from mcp_server.auth import crypto
 
-            tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-            if tenant:
-                crypto = get_crypto_manager()
-                ciphertext, tag, nonce = crypto.encrypt_api_key(
-                    api_key, tenant.master_key_hash, str(tenant.salt)
-                )
-                store.api_key_ciphertext = ciphertext
-                store.api_key_tag = tag
-                store.api_key_nonce = nonce
+            ciphertext, tag, nonce = crypto.encrypt_api_key(api_key, tenant_key)
+            store.api_key_ciphertext = ciphertext
+            store.api_key_tag = tag
+            store.api_key_nonce = nonce
 
         db.commit()
 
