@@ -66,6 +66,47 @@
         </div>
     </div>
 
+    <!-- MCP Configuration -->
+    <div class="bg-white shadow sm:rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-base font-semibold leading-6 text-gray-900 mb-2">MCP Configuration</h3>
+            <p class="text-sm text-gray-600 mb-4">
+                Copy this configuration to use this server with Claude Desktop, ChatGPT, or other MCP-compatible AI assistants.
+            </p>
+            
+            <div class="bg-gray-50 rounded-md p-4 mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-medium text-gray-700">Server URL</label>
+                    <button onclick="copyToClipboard('{{ server_url }}')" class="text-xs text-indigo-600 hover:text-indigo-500">Copy</button>
+                </div>
+                <code class="block text-sm font-mono text-gray-900 bg-white px-3 py-2 rounded border border-gray-300">{{ server_url }}</code>
+            </div>
+            
+            <div class="bg-gray-50 rounded-md p-4 mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-medium text-gray-700">Your Master Key</label>
+                    <button onclick="copyToClipboard(getMasterKeyFromSession())" class="text-xs text-indigo-600 hover:text-indigo-500">Copy</button>
+                </div>
+                <p class="text-xs text-gray-600 mb-2">Your master key (used for authentication)</p>
+                <div class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                    ⚠️ Keep this secure! Store entered during login.
+                </div>
+            </div>
+            
+            <div class="bg-gray-50 rounded-md p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-medium text-gray-700">MCP Server Configuration (JSON)</label>
+                    <button onclick="copyToClipboard(document.getElementById('mcp-config').textContent)" class="text-xs text-indigo-600 hover:text-indigo-500">Copy</button>
+                </div>
+                <p class="text-xs text-gray-600 mb-2">Add this to your MCP client's configuration file</p>
+                <pre id="mcp-config" class="block text-xs font-mono text-gray-900 bg-white px-3 py-2 rounded border border-gray-300 overflow-x-auto whitespace-pre">{{ mcp_config_json }}</pre>
+                <p class="text-xs text-gray-500 mt-2">
+                    💡 Replace <code class="bg-gray-200 px-1 rounded">YOUR_MASTER_KEY_HERE</code> with your actual master key
+                </p>
+            </div>
+        </div>
+    </div>
+
     <!-- Links -->
     <div class="bg-white shadow sm:rounded-lg">
         <div class="px-4 py-5 sm:p-6">
@@ -99,5 +140,29 @@
         </div>
     </div>
 </div>
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        // Show success feedback (simple alert for now)
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('text-green-600');
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.classList.remove('text-green-600');
+        }, 2000);
+    }).catch(err => {
+        alert('Failed to copy: ' + err);
+    });
+}
+
+function getMasterKeyFromSession() {
+    // Master key not stored in session for security
+    // User must copy it manually from their password manager
+    return 'YOUR_MASTER_KEY_HERE';
+}
+</script>
 {% endblock %}
 

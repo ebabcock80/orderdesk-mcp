@@ -260,6 +260,55 @@ class StoreService:
 
         return str(store.store_id), api_key
 
+    async def fetch_and_cache_store_config(
+        self, tenant_id: str, store_db_id: str, tenant_key: bytes
+    ) -> dict | None:
+        """
+        Fetch store configuration from OrderDesk and cache in database.
+        
+        Fetches folders, settings, and other store metadata.
+        
+        Args:
+            tenant_id: Tenant ID
+            store_db_id: Store database UUID
+            tenant_key: Tenant encryption key
+            
+        Returns:
+            Store config dict or None if failed
+        """
+        import json
+        from datetime import datetime, UTC
+        from mcp_server.services.orderdesk_client import OrderDeskClient
+        
+        store = await self.get_store_by_db_id(tenant_id, store_db_id)
+        if not store:
+            return None
+            
+        try:
+            # Get decrypted credentials
+            orderdesk_store_id, api_key = await self.get_decrypted_credentials(store, tenant_key)
+            
+            # Fetch store config from OrderDesk
+            async with OrderDeskClient(orderdesk_store_id, api_key) as client:
+                config = await client.get_store_config()
+                
+            # Cache in database
+            store.store_config = json.dumps(config)
+            store.config_fetched_at = datetime.now(UTC).replace(tzinfo=None)
+            self.db.commit()
+            
+            logger.info(
+                "Store config cached",
+                tenant_id=tenant_id,
+                store_id=store.id,
+                folders_count=len(config.get("store", {}).get("folders", {})),
+            )
+            
+            return config
+        except Exception as e:
+            logger.error("Failed to fetch store config", error=str(e))
+            return None
+    
     async def test_store_credentials(
         self, tenant_id: str, store_id: str, tenant_key: bytes
     ) -> dict:

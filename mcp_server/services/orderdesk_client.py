@@ -478,7 +478,26 @@ class OrderDeskClient:
         self,
         limit: int = 50,
         offset: int = 0,
-        folder_id: int | None = None,
+        folder_id: str | None = None,
+        folder_name: str | None = None,
+        source_id: str | None = None,
+        source_name: str | None = None,
+        search_start_date: str | None = None,
+        search_end_date: str | None = None,
+        modified_start_date: str | None = None,
+        modified_end_date: str | None = None,
+        email: str | None = None,
+        customer_id: str | None = None,
+        customer_first_name: str | None = None,
+        customer_last_name: str | None = None,
+        customer_company: str | None = None,
+        customer_phone: str | None = None,
+        shipping_first_name: str | None = None,
+        shipping_last_name: str | None = None,
+        shipping_company: str | None = None,
+        shipping_phone: str | None = None,
+        order_by: str | None = None,
+        order: str | None = None,
         status: str | None = None,
         search: str | None = None,
     ) -> dict[str, Any]:
@@ -521,10 +540,10 @@ class OrderDeskClient:
         Page 3: limit=50, offset=100  → orders 101-150
         """
         # Validate pagination parameters
-        if limit < 1 or limit > 100:
+        if limit < 1 or limit > 500:
             raise OrderDeskError(
                 code="INVALID_PARAMETER",
-                message=f"Limit must be between 1 and 100, got {limit}",
+                message=f"Limit must be between 1 and 500, got {limit}",
                 details={"limit": limit},
             )
 
@@ -535,15 +554,64 @@ class OrderDeskClient:
                 details={"offset": offset},
             )
 
-        # Build query parameters
+        # Build query parameters - add all supported Order Desk filters
         params: dict[str, Any] = {"limit": limit, "offset": offset}
 
+        # Folder filters
         if folder_id is not None:
             params["folder_id"] = folder_id
-
+        if folder_name:
+            params["folder_name"] = folder_name
+            
+        # Source filters
+        if source_id:
+            params["source_id"] = source_id
+        if source_name:
+            params["source_name"] = source_name
+            
+        # Date filters
+        if search_start_date:
+            params["search_start_date"] = search_start_date
+        if search_end_date:
+            params["search_end_date"] = search_end_date
+        if modified_start_date:
+            params["modified_start_date"] = modified_start_date
+        if modified_end_date:
+            params["modified_end_date"] = modified_end_date
+            
+        # Customer filters
+        if email:
+            params["email"] = email
+        if customer_id:
+            params["customer_id"] = customer_id
+        if customer_first_name:
+            params["customer_first_name"] = customer_first_name
+        if customer_last_name:
+            params["customer_last_name"] = customer_last_name
+        if customer_company:
+            params["customer_company"] = customer_company
+        if customer_phone:
+            params["customer_phone"] = customer_phone
+            
+        # Shipping filters
+        if shipping_first_name:
+            params["shipping_first_name"] = shipping_first_name
+        if shipping_last_name:
+            params["shipping_last_name"] = shipping_last_name
+        if shipping_company:
+            params["shipping_company"] = shipping_company
+        if shipping_phone:
+            params["shipping_phone"] = shipping_phone
+            
+        # Sorting
+        if order_by:
+            params["order_by"] = order_by
+        if order:
+            params["order"] = order
+            
+        # Legacy filters
         if status:
             params["status"] = status
-
         if search:
             params["search"] = search
 
@@ -804,6 +872,22 @@ class OrderDeskClient:
     # Product Operations
     # ========================================================================
 
+    async def get_store_config(self) -> dict[str, Any]:
+        """
+        Get store configuration including folders and settings.
+        
+        Returns:
+            {
+                "store": {
+                    "id": "12345",
+                    "name": "My Store",
+                    "folders": {"123": "Pending", "124": "Shipped"},
+                    "settings": {...}
+                }
+            }
+        """
+        return await self.get("/store")
+    
     async def get_product(self, product_id: str) -> dict[str, Any]:
         """
         Get a single product by ID.

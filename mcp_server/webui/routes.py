@@ -272,7 +272,7 @@ async def add_store(
 
     try:
         # Register store with REAL tenant_key from session
-        await store_service.register_store(
+        new_store = await store_service.register_store(
             tenant_id=tenant_id,
             store_id=store_id,
             api_key=api_key,
@@ -286,6 +286,13 @@ async def add_store(
             tenant_id=tenant_id,
             store_name=store_name,
         )
+        
+        # Fetch and cache store config (folders, settings)
+        try:
+            await store_service.fetch_and_cache_store_config(tenant_id, new_store.id, tenant_key)
+        except Exception as config_err:
+            # Don't fail registration if config fetch fails
+            logger.warning("Failed to fetch store config", error=str(config_err))
 
         # Redirect to stores list
         return RedirectResponse(url="/webui/stores", status_code=303)
@@ -553,6 +560,12 @@ async def test_store_connection(
                 tenant_id=tenant_id,
                 store_id=store_id,
             )
+            
+            # Fetch and cache store config after successful test
+            try:
+                await store_service.fetch_and_cache_store_config(tenant_id, store_id, tenant_key)
+            except Exception as config_err:
+                logger.warning("Failed to fetch store config after test", error=str(config_err))
         else:
             logger.warning(
                 "Store connection test failed",
@@ -1035,6 +1048,9 @@ async def settings_page(
     Returns:
         Settings HTML page
     """
+    import json
+    
+    # Server configuration
     config = {
         "cache_backend": settings.cache_backend,
         "enable_metrics": settings.enable_metrics,
@@ -1043,6 +1059,28 @@ async def settings_page(
         "session_timeout": settings.session_timeout,
         "version": "0.1.0-alpha",
     }
+    
+    # MCP configuration template for Claude/ChatGPT
+    # Users can copy this into their MCP settings
+    server_url = request.url.scheme + "://" + request.url.netloc
+    mcp_config = {
+        "mcpServers": {
+            "orderdesk": {
+                "command": "curl",
+                "args": [
+                    "-X", "POST",
+                    f"{server_url}/mcp",
+                    "-H", "Content-Type: application/json",
+                    "-H", f"Authorization: Bearer YOUR_MASTER_KEY_HERE",
+                    "-d", "@-"
+                ],
+                "description": "OrderDesk MCP Server - Manage orders, products, and stores"
+            }
+        }
+    }
+    
+    # Pretty-printed JSON for copy/paste
+    mcp_config_json = json.dumps(mcp_config, indent=2)
 
     return get_templates().TemplateResponse(
         "settings.html",
@@ -1050,6 +1088,8 @@ async def settings_page(
             "request": request,
             "user": user,
             "config": config,
+            "mcp_config_json": mcp_config_json,
+            "server_url": server_url,
             "csrf_token": generate_csrf_token(),
         },
     )

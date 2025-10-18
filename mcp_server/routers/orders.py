@@ -614,7 +614,7 @@ class ListOrdersParams(BaseModel):
                 "store_identifier": "production",
                 "limit": 50,
                 "offset": 0,
-                "status": "open",
+                "folder_name": "Pending",
             }
         }
     )
@@ -623,10 +623,43 @@ class ListOrdersParams(BaseModel):
         None, description="Store ID or name (optional if active store is set)"
     )
     limit: int = Field(
-        50, ge=1, le=100, description="Number of orders to return (1-100, default 50)"
+        50, ge=1, le=500, description="Number of orders to return (1-500, default 50)"
     )
     offset: int = Field(0, ge=0, description="Number of orders to skip (default 0)")
-    folder_id: int | None = Field(None, description="Filter by folder ID")
+    
+    # Folder filters
+    folder_id: str | None = Field(None, description="Filter by folder ID (can be comma-separated: '1004,1009')")
+    folder_name: str | None = Field(None, description="Filter by exact folder name")
+    
+    # Source filters
+    source_id: str | None = Field(None, description="Filter by source ID")
+    source_name: str | None = Field(None, description="Filter by source name")
+    
+    # Date filters
+    search_start_date: str | None = Field(None, description="Start date (YYYY-MM-DD HH:MM:SS UTC)")
+    search_end_date: str | None = Field(None, description="End date (YYYY-MM-DD HH:MM:SS UTC)")
+    modified_start_date: str | None = Field(None, description="Modified after (YYYY-MM-DD HH:MM:SS UTC)")
+    modified_end_date: str | None = Field(None, description="Modified before (YYYY-MM-DD HH:MM:SS UTC)")
+    
+    # Customer filters
+    email: str | None = Field(None, description="Filter by customer email")
+    customer_id: str | None = Field(None, description="Filter by customer ID")
+    customer_first_name: str | None = Field(None, description="Search customer first name")
+    customer_last_name: str | None = Field(None, description="Search customer last name")
+    customer_company: str | None = Field(None, description="Search customer company")
+    customer_phone: str | None = Field(None, description="Search customer phone")
+    
+    # Shipping filters
+    shipping_first_name: str | None = Field(None, description="Search shipping first name")
+    shipping_last_name: str | None = Field(None, description="Search shipping last name")
+    shipping_company: str | None = Field(None, description="Search shipping company")
+    shipping_phone: str | None = Field(None, description="Search shipping phone")
+    
+    # Sorting
+    order_by: str | None = Field(None, description="Order by field (default: date_added)")
+    order: str | None = Field(None, description="Sort direction: ASC or DESC (default: DESC)")
+    
+    # Legacy
     status: str | None = Field(
         None, description="Filter by status (e.g., 'open', 'completed', 'cancelled')"
     )
@@ -849,11 +882,30 @@ async def list_orders_mcp(
 
         # Create OrderDesk client
         async with OrderDeskClient(store_id, api_key) as client:
-            # Fetch orders
+            # Fetch orders with all filter parameters
             response = await client.list_orders(
                 limit=params.limit,
                 offset=params.offset,
                 folder_id=params.folder_id,
+                folder_name=params.folder_name,
+                source_id=params.source_id,
+                source_name=params.source_name,
+                search_start_date=params.search_start_date,
+                search_end_date=params.search_end_date,
+                modified_start_date=params.modified_start_date,
+                modified_end_date=params.modified_end_date,
+                email=params.email,
+                customer_id=params.customer_id,
+                customer_first_name=params.customer_first_name,
+                customer_last_name=params.customer_last_name,
+                customer_company=params.customer_company,
+                customer_phone=params.customer_phone,
+                shipping_first_name=params.shipping_first_name,
+                shipping_last_name=params.shipping_last_name,
+                shipping_company=params.shipping_company,
+                shipping_phone=params.shipping_phone,
+                order_by=params.order_by,
+                order=params.order,
                 status=params.status,
                 search=params.search,
             )
