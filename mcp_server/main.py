@@ -212,7 +212,7 @@ async def auth_error_handler(request: Request, exc: AuthError):
         content={
             "error": {
                 "code": "UNAUTHORIZED",
-                "message": str(exc.message) if hasattr(exc, 'message') else str(exc),
+                "message": str(exc.message) if hasattr(exc, "message") else str(exc),
                 "request_id": request_id,
             }
         },

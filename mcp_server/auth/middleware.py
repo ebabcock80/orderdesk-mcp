@@ -75,7 +75,7 @@ async def authenticate_request(request: Request) -> Tenant:
 async def auth_middleware(request: Request, call_next):
     """Authentication middleware."""
     from fastapi.responses import JSONResponse
-    
+
     # Skip auth for health and docs endpoints
     if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
         response = await call_next(request)
@@ -96,7 +96,7 @@ async def auth_middleware(request: Request, call_next):
             content={
                 "error": {
                     "code": "UNAUTHORIZED",
-                    "message": e.message if hasattr(e, 'message') else str(e),
+                    "message": e.message if hasattr(e, "message") else str(e),
                 }
             },
         )
