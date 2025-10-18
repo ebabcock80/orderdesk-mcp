@@ -898,10 +898,18 @@ async def execute_tool(
         tenant_key = user.get("tenant_key")
         
         if not tenant_key:
-            # Fallback to dummy key if not in session (shouldn't happen after login fix)
-            logger.warning("No tenant_key in session, using dummy key - decryption will fail!")
-            tenant_key = b"webui_session" + b"\x00" * 19  # Pad to 32 bytes
+            # Old session doesn't have tenant_key - user needs to log out and log in again
+            logger.error(
+                "No tenant_key in session - user must log out and log in again!",
+                user_keys=list(user.keys()),
+            )
+            return {
+                "success": False,
+                "error": "Session missing tenant_key. Please log out and log in again to get a fresh session.",
+                "error_type": "AuthError",
+            }
         
+        logger.info("Using tenant_key from session", has_key=bool(tenant_key), key_len=len(tenant_key))
         set_tenant(tenant_id, tenant_key)
 
         # Execute tool
