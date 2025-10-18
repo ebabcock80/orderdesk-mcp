@@ -13,7 +13,7 @@ MCP Tools:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from mcp_server.auth import crypto
@@ -131,14 +131,15 @@ async def delete_store(
 class UseMasterKeyParams(BaseModel):
     """Parameters for tenant.use_master_key tool."""
 
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"master_key": "your-32-char-master-key-here"}}
+    )
+
     master_key: str = Field(
         ...,
         description="Your master key (min 16 chars). Keep this secret!",
         min_length=16,
     )
-
-    class Config:
-        json_schema_extra = {"example": {"master_key": "your-32-char-master-key-here"}}
 
 
 class RegisterStoreParams(BaseModel):
@@ -149,6 +150,17 @@ class RegisterStoreParams(BaseModel):
     Docs: See speckit.specify for store management details.
     """
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "store_id": "12345",
+                "api_key": "your-orderdesk-api-key",
+                "store_name": "my-production-store",
+                "label": "Production",
+            }
+        }
+    )
+
     store_id: str = Field(..., description="OrderDesk store ID from Settings > API")
     api_key: str = Field(..., description="OrderDesk API key from Settings > API")
     store_name: str | None = Field(
@@ -158,26 +170,17 @@ class RegisterStoreParams(BaseModel):
         None, description="Optional label (e.g., 'Production', 'Staging')"
     )
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "store_id": "12345",
-                "api_key": "your-orderdesk-api-key",
-                "store_name": "my-production-store",
-                "label": "Production",
-            }
-        }
-
 
 class UseStoreParams(BaseModel):
     """Parameters for stores.use_store tool."""
 
-    identifier: str = Field(..., description="Store ID or store name")
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "examples": [{"identifier": "12345"}, {"identifier": "my-production-store"}]
         }
+    )
+
+    identifier: str = Field(..., description="Store ID or store name")
 
 
 class DeleteStoreParams(BaseModel):

@@ -608,6 +608,17 @@ class GetOrderParams(BaseModel):
 class ListOrdersParams(BaseModel):
     """Parameters for orders.list tool."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "store_identifier": "production",
+                "limit": 50,
+                "offset": 0,
+                "status": "open",
+            }
+        }
+    )
+
     store_identifier: str | None = Field(
         None, description="Store ID or name (optional if active store is set)"
     )
@@ -622,16 +633,6 @@ class ListOrdersParams(BaseModel):
     search: str | None = Field(
         None, description="Search query (searches order ID, email, name, etc.)"
     )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "store_identifier": "production",
-                "limit": 50,
-                "offset": 0,
-                "status": "open",
-            }
-        }
 
 
 # MCP Tool Implementations
@@ -902,15 +903,8 @@ async def list_orders_mcp(
 class CreateOrderParams(BaseModel):
     """Parameters for orders.create tool."""
 
-    order_data: dict[str, Any] = Field(
-        ..., description="Order data including email and items"
-    )
-    store_identifier: str | None = Field(
-        None, description="Store ID or name (optional if active store is set)"
-    )
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "order_data": {
                     "email": "customer@example.com",
@@ -922,19 +916,21 @@ class CreateOrderParams(BaseModel):
                 "store_identifier": "production",
             }
         }
+    )
+
+    order_data: dict[str, Any] = Field(
+        ..., description="Order data including email and items"
+    )
+    store_identifier: str | None = Field(
+        None, description="Store ID or name (optional if active store is set)"
+    )
 
 
 class UpdateOrderParams(BaseModel):
     """Parameters for orders.update tool."""
 
-    order_id: str = Field(..., description="OrderDesk order ID")
-    changes: dict[str, Any] = Field(..., description="Partial changes to apply")
-    store_identifier: str | None = Field(
-        None, description="Store ID or name (optional if active store is set)"
-    )
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "order_id": "123456",
                 "changes": {
@@ -944,20 +940,28 @@ class UpdateOrderParams(BaseModel):
                 "store_identifier": "production",
             }
         }
+    )
+
+    order_id: str = Field(..., description="OrderDesk order ID")
+    changes: dict[str, Any] = Field(..., description="Partial changes to apply")
+    store_identifier: str | None = Field(
+        None, description="Store ID or name (optional if active store is set)"
+    )
 
 
 class DeleteOrderParams(BaseModel):
     """Parameters for orders.delete tool."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"order_id": "123456", "store_identifier": "production"}
+        }
+    )
+
     order_id: str = Field(..., description="OrderDesk order ID")
     store_identifier: str | None = Field(
         None, description="Store ID or name (optional if active store is set)"
     )
-
-    class Config:
-        json_schema_extra = {
-            "example": {"order_id": "123456", "store_identifier": "production"}
-        }
 
 
 # Additional MCP Tool Implementations

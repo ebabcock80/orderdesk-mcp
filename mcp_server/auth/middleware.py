@@ -78,7 +78,13 @@ async def auth_middleware(request: Request, call_next):
     from fastapi.responses import JSONResponse
 
     # Skip auth for health and docs endpoints
-    if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
+    # Exclude health checks, docs, metrics, and WebUI from auth
+    if request.url.path.startswith("/health") or request.url.path in [
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/metrics",
+    ] or request.url.path.startswith("/webui"):
         response = await call_next(request)
         return response
 
