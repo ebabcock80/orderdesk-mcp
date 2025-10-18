@@ -50,6 +50,26 @@
                 </div>
             </form>
 
+            {% if signup_enabled %}
+            <div class="mt-6">
+                <div class="relative">
+                    <div class="absolute inset-0 flex items-center">
+                        <div class="w-full border-t border-gray-300"></div>
+                    </div>
+                    <div class="relative flex justify-center text-sm">
+                        <span class="bg-white px-2 text-gray-500">Don't have an account?</span>
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <a href="/webui/signup"
+                       class="flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                        Create Account
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="mt-6">
                 <div class="relative">
                     <div class="absolute inset-0 flex items-center">

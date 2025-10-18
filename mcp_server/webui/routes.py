@@ -50,6 +50,7 @@ async def login_page(request: Request):
             "request": request,
             "csrf_token": csrf_token,
             "error": None,
+            "signup_enabled": settings.enable_public_signup,
         },
     )
 

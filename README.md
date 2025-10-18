@@ -21,7 +21,7 @@ A native Model Context Protocol (MCP) server for OrderDesk integration with AI a
 - **Docker Ready**: Multi-stage Docker build with health checks
 - **Persistent Storage**: SQLite database with volume mounting for data persistence
 
-### 🎨 NEW: WebUI Admin Interface (Phase 5) ⭐
+### 🎨 WebUI Admin Interface (Phase 5) ⭐
 - **Professional Dashboard**: Visual overview of stores, API status, and quick actions
 - **Store Management**: Full CRUD operations for OrderDesk store registrations
 - **Interactive API Console**: Test all 13 MCP tools directly from your browser
@@ -30,6 +30,17 @@ A native Model Context Protocol (MCP) server for OrderDesk integration with AI a
 - **Real-time Feedback**: Instant response display with syntax highlighting
 - **Request History**: Track your last 10 API requests
 - **Settings Page**: View configuration and system information
+
+### 👥 NEW: User Management + Optional Public Signup (Phase 6) ⭐
+- **User Management**: Master key holders can view and manage all users
+- **Activity Tracking**: Monitor user logins, activity, and store usage
+- **Cascade Delete**: Remove users and ALL their data (stores, audit logs, sessions)
+- **Optional Public Signup**: Enable/disable public registration with `ENABLE_PUBLIC_SIGNUP`
+- **Email Verification**: Secure signup flow with magic link verification
+- **Master Key Generation**: Cryptographically secure keys (64-char URL-safe)
+- **One-Time Display**: Master key shown once with copy/download options
+- **Rate Limiting**: 3 signups per hour per IP (configurable)
+- **Self-Service**: Users can sign up, verify email, and get their master key automatically
 
 **Access the WebUI:** Set `ENABLE_WEBUI=true` in `.env` and visit `http://localhost:8000/webui`
 
@@ -201,6 +212,23 @@ JWT_SECRET_KEY=your-secure-random-64-char-key-here
 SESSION_TIMEOUT=3600
 SESSION_COOKIE_SECURE=true
 SESSION_COOKIE_SAMESITE=strict
+
+# Phase 6: User Management + Optional Public Signup
+ENABLE_PUBLIC_SIGNUP=false  # Set to true for public/SaaS deployments
+REQUIRE_EMAIL_VERIFICATION=true
+
+# Email Configuration (for public signup)
+EMAIL_PROVIDER=console  # Use 'smtp' for production
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_USE_TLS=true
+SMTP_FROM_EMAIL=noreply@yourdomain.com
+
+# Signup Rate Limiting
+SIGNUP_RATE_LIMIT_PER_HOUR=3
+SIGNUP_VERIFICATION_EXPIRY=900  # 15 minutes
 ```
 
 ### Step 2: Start the Server

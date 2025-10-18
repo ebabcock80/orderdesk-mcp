@@ -106,8 +106,9 @@ class MagicLinkService:
             logger.warning("Magic link not found or already used", token_hash=token_hash[:8])
             return False, None, None
 
-        # Check expiry
-        if magic_link.expires_at < datetime.now(timezone.utc):
+        # Check expiry (use naive datetime since SQLite stores naive)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if magic_link.expires_at < now:
             logger.warning(
                 "Magic link expired",
                 email=magic_link.email,
@@ -136,9 +137,11 @@ class MagicLinkService:
         Returns:
             Number of links deleted
         """
+        # Use naive datetime since SQLite stores naive
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         count = (
             self.db.query(MagicLink)
-            .filter(MagicLink.expires_at < datetime.now(timezone.utc))
+            .filter(MagicLink.expires_at < now)
             .delete()
         )
         self.db.commit()
@@ -159,13 +162,15 @@ class MagicLinkService:
         Returns:
             Count of active links
         """
+        # Use naive datetime since SQLite stores naive
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         return (
             self.db.query(MagicLink)
             .filter(
                 MagicLink.email == email,
                 MagicLink.purpose == purpose,
                 MagicLink.used == False,  # noqa: E712
-                MagicLink.expires_at > datetime.now(timezone.utc),
+                MagicLink.expires_at > now,
             )
             .count()
         )

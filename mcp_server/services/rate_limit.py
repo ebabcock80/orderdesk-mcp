@@ -32,8 +32,8 @@ class RateLimitService:
             - is_allowed: True if signup is allowed
             - remaining_attempts: Number of signup attempts remaining
         """
-        # Count signup attempts in the last hour
-        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+        # Count signup attempts in the last hour (use naive datetime for SQLite)
+        one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
 
         count = (
             self.db.query(MagicLink)
@@ -73,8 +73,8 @@ class RateLimitService:
         Returns:
             Datetime when rate limit resets, or None if no limit active
         """
-        # Find oldest magic link in the last hour
-        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+        # Find oldest magic link in the last hour (use naive datetime for SQLite)
+        one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
 
         oldest = (
             self.db.query(MagicLink)

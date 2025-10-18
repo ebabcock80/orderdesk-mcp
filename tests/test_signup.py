@@ -128,26 +128,31 @@ class TestRateLimitService:
         """Test that expired magic links don't count toward rate limit."""
         service = RateLimitService(db_session)
 
-        # Create expired magic link
+        # Use unique IP to avoid test isolation issues
+        import uuid
+        unique_id = str(uuid.uuid4())
+        unique_ip = f"10.0.0.{uuid.uuid4().hex[:3]}"
+        
+        # Create expired magic link (created 2 hours ago)
         magic_link = MagicLink(
             email="test@example.com",
-            token="test-token",
-            token_hash="test-hash",
+            token=f"test-token-{unique_id}",
+            token_hash=f"test-hash-{unique_id}",
             purpose="email_verification",
-            ip_address="192.168.1.1",
+            ip_address=unique_ip,
             used=False,
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
-            created_at=datetime.now(timezone.utc) - timedelta(hours=2),  # 2 hours ago
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2),  # 2 hours ago
         )
         db_session.add(magic_link)
         db_session.commit()
 
         is_allowed, remaining = service.check_signup_rate_limit(
-            ip_address="192.168.1.1",
+            ip_address=unique_ip,
             limit_per_hour=3,
         )
 
-        # Should be allowed since expired link doesn't count
+        # Should be allowed since expired link doesn't count (2 hours old)
         assert is_allowed is True
         assert remaining == 3
 
@@ -155,16 +160,18 @@ class TestRateLimitService:
         """Test that rate limit is per IP address."""
         service = RateLimitService(db_session)
 
-        # Create 3 magic links for IP1
+        # Create 3 magic links for IP1 (use unique tokens)
+        import uuid
         for i in range(3):
+            unique_id = str(uuid.uuid4())
             magic_link = MagicLink(
                 email=f"test{i}@example.com",
-                token=f"test-token-{i}",
-                token_hash=f"test-hash-{i}",
+                token=f"test-token-{unique_id}",
+                token_hash=f"test-hash-{unique_id}",
                 purpose="email_verification",
                 ip_address="192.168.1.1",
                 used=False,
-                expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
+                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15),
             )
             db_session.add(magic_link)
         db_session.commit()
@@ -190,12 +197,14 @@ class TestRateLimitService:
         """Test getting rate limit reset time."""
         service = RateLimitService(db_session)
 
-        # Create magic link
-        created_at = datetime.now(timezone.utc)
+        # Create magic link (use unique token and naive datetime)
+        import uuid
+        unique_id = str(uuid.uuid4())
+        created_at = datetime.now(timezone.utc).replace(tzinfo=None)
         magic_link = MagicLink(
             email="test@example.com",
-            token="test-token",
-            token_hash="test-hash",
+            token=f"test-token-{unique_id}",
+            token_hash=f"test-hash-{unique_id}",
             purpose="email_verification",
             ip_address="192.168.1.1",
             used=False,
@@ -217,7 +226,10 @@ class TestRateLimitService:
         """Test getting reset time when no rate limit active."""
         service = RateLimitService(db_session)
 
-        reset_time = service.get_rate_limit_reset_time("192.168.1.1")
+        # Use unique IP to avoid test isolation issues
+        import uuid
+        unique_ip = f"192.168.1.{uuid.uuid4().hex[:3]}"
+        reset_time = service.get_rate_limit_reset_time(unique_ip)
 
         assert reset_time is None
 
