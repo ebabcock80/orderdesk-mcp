@@ -11,6 +11,12 @@ from mcp_server.config import settings
 from mcp_server.models.database import get_db
 from mcp_server.services.store import StoreService
 from mcp_server.services.user import UserService
+from mcp_server.services.rate_limit import RateLimitService
+from mcp_server.email import EmailService
+from mcp_server.email.providers import ConsoleEmailProvider, SMTPEmailProvider
+from mcp_server.email.magic_link import MagicLinkService
+from mcp_server.utils.master_key import generate_master_key
+from mcp_server.auth.crypto import hash_master_key
 from mcp_server.utils.logging import logger
 from mcp_server.webui.auth import (
     auth_manager,
@@ -989,6 +995,288 @@ async def delete_user(
             url=f"/webui/users?error=user_not_found",
             status_code=303,
         )
+
+
+# ============================================================================
+# Public Signup Routes (Phase 6 - Sprint 3)
+# ============================================================================
+
+
+def get_email_service() -> EmailService | None:
+    """Get configured email service based on settings."""
+    if not settings.enable_public_signup:
+        return None
+
+    # Create provider based on configuration
+    if settings.email_provider == "smtp":
+        if not all([settings.smtp_host, settings.smtp_from_email]):
+            logger.error("SMTP provider selected but not configured")
+            return None
+
+        provider = SMTPEmailProvider(
+            host=settings.smtp_host,
+            port=settings.smtp_port,
+            username=settings.smtp_username,
+            password=settings.smtp_password,
+            use_tls=settings.smtp_use_tls,
+            from_email=settings.smtp_from_email,
+        )
+    else:
+        # Default to console provider for development
+        provider = ConsoleEmailProvider(from_email="noreply@localhost")
+
+    return EmailService(provider=provider)
+
+
+@router.get("/signup", response_class=HTMLResponse)
+async def signup_form(
+    request: Request,
+    error: str | None = None,
+):
+    """
+    Display signup form (only if public signup is enabled).
+
+    Args:
+        request: FastAPI request
+        error: Optional error message
+
+    Returns:
+        Signup form HTML page or 404 if signup disabled
+    """
+    if not settings.enable_public_signup:
+        return get_templates().TemplateResponse(
+            "404.html",
+            {"request": request, "message": "Public signup is not enabled"},
+            status_code=404,
+        )
+
+    csrf_token = generate_csrf_token()
+
+    return get_templates().TemplateResponse(
+        "signup/form.html",
+        {
+            "request": request,
+            "csrf_token": csrf_token,
+            "error": error,
+            "email": request.query_params.get("email"),
+        },
+    )
+
+
+@router.post("/signup")
+async def signup(
+    request: Request,
+    email: str = Form(...),
+    csrf_token: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Process signup form submission.
+
+    Args:
+        request: FastAPI request
+        email: Email address from form
+        csrf_token: CSRF token from form
+        db: Database session
+
+    Returns:
+        Redirect to verification pending page or signup form with error
+    """
+    if not settings.enable_public_signup:
+        return RedirectResponse(url="/webui/login", status_code=303)
+
+    # Get client IP for rate limiting
+    client_host = request.client.host if request.client else "unknown"
+
+    # Check rate limit
+    rate_limit_service = RateLimitService(db)
+    is_allowed, remaining = rate_limit_service.check_signup_rate_limit(
+        ip_address=client_host,
+        limit_per_hour=settings.signup_rate_limit_per_hour,
+    )
+
+    if not is_allowed:
+        reset_time = rate_limit_service.get_rate_limit_reset_time(client_host)
+        return get_templates().TemplateResponse(
+            "signup/form.html",
+            {
+                "request": request,
+                "csrf_token": generate_csrf_token(),
+                "error": f"Rate limit exceeded. Too many signup attempts. Please try again later.",
+                "email": email,
+            },
+            status_code=429,
+        )
+
+    # Check if email already exists
+    from mcp_server.models.database import Tenant
+
+    existing = db.query(Tenant).filter(Tenant.email == email).first()
+    if existing:
+        return get_templates().TemplateResponse(
+            "signup/form.html",
+            {
+                "request": request,
+                "csrf_token": generate_csrf_token(),
+                "error": "An account with this email already exists. Please log in instead.",
+                "email": email,
+            },
+            status_code=400,
+        )
+
+    # Generate magic link
+    magic_link_service = MagicLinkService(db)
+    token, token_hash = magic_link_service.generate_magic_link(
+        email=email,
+        purpose="email_verification",
+        ip_address=client_host,
+        expiry_seconds=settings.signup_verification_expiry,
+    )
+
+    # Generate verification link
+    base_url = str(request.base_url).rstrip("/")
+    verification_link = f"{base_url}/webui/verify/{token}"
+
+    # Send verification email
+    email_service = get_email_service()
+    if email_service and email_service.is_enabled():
+        success = await email_service.send_verification_email(
+            to=email,
+            verification_link=verification_link,
+            master_key=None,  # Master key generated after verification
+        )
+
+        if not success:
+            logger.error("Failed to send verification email", email=email)
+            return get_templates().TemplateResponse(
+                "signup/form.html",
+                {
+                    "request": request,
+                    "csrf_token": generate_csrf_token(),
+                    "error": "Failed to send verification email. Please try again.",
+                    "email": email,
+                },
+                status_code=500,
+            )
+    else:
+        logger.error("Email service not configured")
+        return get_templates().TemplateResponse(
+            "signup/form.html",
+            {
+                "request": request,
+                "csrf_token": generate_csrf_token(),
+                "error": "Email service not configured. Please contact administrator.",
+                "email": email,
+            },
+            status_code=500,
+        )
+
+    logger.info("Signup verification email sent", email=email, ip=client_host)
+
+    # Redirect to verification pending page
+    return get_templates().TemplateResponse(
+        "signup/verify_pending.html",
+        {
+            "request": request,
+            "email": email,
+        },
+    )
+
+
+@router.get("/verify/{token}")
+async def verify_email(
+    request: Request,
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Verify email address and create account.
+
+    Args:
+        request: FastAPI request
+        token: Magic link token from URL
+        db: Database session
+
+    Returns:
+        Success page with master key or error page
+    """
+    if not settings.enable_public_signup:
+        return RedirectResponse(url="/webui/login", status_code=303)
+
+    # Verify magic link
+    magic_link_service = MagicLinkService(db)
+    success, email, tenant_id = magic_link_service.verify_magic_link(
+        token=token,
+        purpose="email_verification",
+    )
+
+    if not success or not email:
+        logger.warning("Email verification failed", token=token[:8])
+        return get_templates().TemplateResponse(
+            "signup/form.html",
+            {
+                "request": request,
+                "csrf_token": generate_csrf_token(),
+                "error": "Verification link is invalid or has expired. Please sign up again.",
+            },
+            status_code=400,
+        )
+
+    # Check if user already exists (shouldn't happen, but double-check)
+    from mcp_server.models.database import Tenant
+
+    existing = db.query(Tenant).filter(Tenant.email == email).first()
+    if existing:
+        logger.warning("User already exists during verification", email=email)
+        return RedirectResponse(url="/webui/login?error=already_exists", status_code=303)
+
+    # Generate master key
+    master_key = generate_master_key(length=48)  # 64-char URL-safe string
+
+    # Hash master key
+    master_key_hash, salt = hash_master_key(master_key)
+
+    # Create tenant
+    tenant = Tenant(
+        master_key_hash=master_key_hash,
+        salt=salt,
+        email=email,
+        email_verified=True,  # Just verified
+        last_login=None,
+        last_activity=None,
+    )
+
+    db.add(tenant)
+    db.commit()
+    db.refresh(tenant)
+
+    logger.info(
+        "Account created via public signup",
+        email=email,
+        tenant_id=tenant.id,
+    )
+
+    # Send welcome email (optional, don't fail if it doesn't work)
+    email_service = get_email_service()
+    if email_service and email_service.is_enabled():
+        try:
+            await email_service.send_welcome_email(
+                to=email,
+                master_key=master_key,
+            )
+        except Exception as e:
+            logger.error("Failed to send welcome email", error=str(e), email=email)
+            # Don't fail the signup if welcome email fails
+
+    # Show success page with master key (ONE TIME ONLY)
+    return get_templates().TemplateResponse(
+        "signup/success.html",
+        {
+            "request": request,
+            "email": email,
+            "master_key": master_key,
+        },
+    )
 
 
 # Add root redirect

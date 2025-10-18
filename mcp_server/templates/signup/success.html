@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Created - OrderDesk MCP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full">
+    <div class="min-h-full flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="sm:mx-auto sm:w-full sm:max-w-2xl">
+            <div class="text-center">
+                <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100">
+                    <svg class="h-10 w-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <h1 class="mt-4 text-center text-3xl font-bold text-gray-900">
+                    🎉 Account Created!
+                </h1>
+                <p class="mt-2 text-center text-sm text-gray-600">
+                    Your OrderDesk MCP account is ready to use
+                </p>
+            </div>
+        </div>
+
+        <!-- Master Key Display -->
+        <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-2xl">
+            <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+                <!-- Critical Warning -->
+                <div class="mb-6 bg-red-50 border-l-4 border-red-400 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-red-800">
+                                ⚠️ CRITICAL: Save Your Master Key NOW
+                            </h3>
+                            <div class="mt-2 text-sm text-red-700">
+                                <p class="font-bold">This key is shown ONLY ONCE and cannot be recovered!</p>
+                                <p class="mt-1">If you lose this key, you will lose access to your account permanently.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Master Key -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Your Master Key
+                    </label>
+                    <div class="relative">
+                        <div id="master-key-box" class="bg-indigo-50 border-2 border-indigo-600 rounded-lg p-4 font-mono text-sm break-all">
+                            {{ master_key }}
+                        </div>
+                        <button
+                            onclick="copyMasterKey()"
+                            class="absolute top-2 right-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs font-medium"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                    <p class="mt-2 text-xs text-gray-500">
+                        Click "Copy" or select and copy the text above
+                    </p>
+                </div>
+
+                <!-- Copy Confirmation -->
+                <div id="copy-success" class="hidden mb-4 bg-green-50 border-l-4 border-green-400 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-green-700 font-medium">
+                                ✓ Master key copied to clipboard!
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Download Button -->
+                <div class="mb-6">
+                    <button
+                        onclick="downloadMasterKey()"
+                        class="w-full flex justify-center items-center py-2 px-4 border border-indigo-600 rounded-md shadow-sm text-sm font-medium text-indigo-600 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Download Master Key as Text File
+                    </button>
+                </div>
+
+                <!-- Instructions -->
+                <div class="mb-6 bg-blue-50 border-l-4 border-blue-400 p-4">
+                    <h3 class="text-sm font-medium text-blue-800 mb-2">
+                        📋 What to do with your master key:
+                    </h3>
+                    <ul class="text-sm text-blue-700 space-y-1 list-disc list-inside">
+                        <li>Save it in a password manager (1Password, LastPass, etc.)</li>
+                        <li>Store it in a secure note on your device</li>
+                        <li>Write it down and keep it in a safe place</li>
+                        <li><strong>Do NOT</strong> share it with anyone</li>
+                        <li><strong>Do NOT</strong> store it in plain text files</li>
+                    </ul>
+                </div>
+
+                <!-- Confirmation Checkbox -->
+                <div class="mb-6">
+                    <label class="flex items-start">
+                        <input
+                            type="checkbox"
+                            id="confirm-saved"
+                            class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            onchange="toggleContinueButton()"
+                        >
+                        <span class="ml-2 text-sm text-gray-700">
+                            I have saved my master key in a secure location. I understand that <strong>I cannot recover it</strong> if I lose it, and I will lose access to my account permanently.
+                        </span>
+                    </label>
+                </div>
+
+                <!-- Continue Button -->
+                <div>
+                    <button
+                        id="continue-btn"
+                        onclick="goToLogin()"
+                        disabled
+                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    >
+                        Continue to Login
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const masterKey = "{{ master_key }}";
+
+        function copyMasterKey() {
+            navigator.clipboard.writeText(masterKey).then(() => {
+                // Show success message
+                document.getElementById('copy-success').classList.remove('hidden');
+                setTimeout(() => {
+                    document.getElementById('copy-success').classList.add('hidden');
+                }, 3000);
+            }).catch(err => {
+                alert('Failed to copy: ' + err);
+            });
+        }
+
+        function downloadMasterKey() {
+            const content = `OrderDesk MCP Master Key
+=========================
+
+Master Key: ${masterKey}
+
+⚠️ IMPORTANT SECURITY NOTICE:
+- Keep this key secure and private
+- Anyone with this key can access your account
+- This key cannot be recovered if lost
+- Do not share this key with anyone
+
+Save this file in a secure location and delete it after storing
+the key in your password manager.
+
+Generated: ${new Date().toISOString()}
+`;
+
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'orderdesk-mcp-master-key.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        function toggleContinueButton() {
+            const checkbox = document.getElementById('confirm-saved');
+            const button = document.getElementById('continue-btn');
+            button.disabled = !checkbox.checked;
+        }
+
+        function goToLogin() {
+            window.location.href = '/webui/login';
+        }
+
+        // Auto-select master key on click
+        document.getElementById('master-key-box').addEventListener('click', function() {
+            const range = document.createRange();
+            range.selectNodeContents(this);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+        });
+    </script>
+</body>
+</html>
+
