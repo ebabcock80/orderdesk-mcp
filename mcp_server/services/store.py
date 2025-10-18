@@ -152,6 +152,20 @@ class StoreService:
             .filter(Store.tenant_id == tenant_id, Store.store_id == store_id)
             .first()
         )
+    
+    async def get_store_by_db_id(self, tenant_id: str, db_id: str) -> Store | None:
+        """
+        Get store by database UUID.
+
+        Args:
+            tenant_id: Tenant ID
+            db_id: Database UUID (Store.id)
+        """
+        return (
+            self.db.query(Store)
+            .filter(Store.tenant_id == tenant_id, Store.id == db_id)
+            .first()
+        )
 
     async def get_store_by_name(self, tenant_id: str, store_name: str) -> Store | None:
         """

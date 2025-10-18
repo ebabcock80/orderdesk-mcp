@@ -312,11 +312,19 @@ async def delete_store(
     store_service = StoreService(db)
 
     try:
-        await store_service.delete_store(tenant_id, str(store_id))
-        logger.info("Store deleted via WebUI", tenant_id=tenant_id, store_id=store_id)
+        # Get store by database UUID first
+        store = await store_service.get_store_by_db_id(tenant_id, str(store_id))
+        
+        if store:
+            # Delete using the database record
+            db.delete(store)
+            db.commit()
+            logger.info("Store deleted via WebUI", tenant_id=tenant_id, store_id=store_id, store_name=store.store_name)
+        else:
+            logger.warning("Store not found for deletion", tenant_id=tenant_id, store_id=store_id)
     except Exception as e:
         logger.error("Failed to delete store via WebUI", error=str(e))
-        # Still redirect, but could add flash message
+        db.rollback()
 
     return RedirectResponse(url="/webui/stores", status_code=303)
 
@@ -333,7 +341,7 @@ async def store_details(
 
     Args:
         request: FastAPI request
-        store_id: Store database ID
+        store_id: Store database ID (UUID)
         user: Current authenticated user
         db: Database session
 
@@ -343,8 +351,8 @@ async def store_details(
     tenant_id = str(user["tenant_id"])
     store_service = StoreService(db)
 
-    # Get store
-    store = await store_service.get_store(tenant_id, str(store_id))
+    # Get store by database UUID
+    store = await store_service.get_store_by_db_id(tenant_id, str(store_id))
     if not store:
         # Store not found - redirect to list
         return RedirectResponse(url="/webui/stores", status_code=303)
@@ -371,8 +379,8 @@ async def edit_store_form(
     tenant_id = str(user["tenant_id"])
     store_service = StoreService(db)
 
-    # Get store
-    store = await store_service.get_store(tenant_id, str(store_id))
+    # Get store by database UUID
+    store = await store_service.get_store_by_db_id(tenant_id, str(store_id))
     if not store:
         return RedirectResponse(url="/webui/stores", status_code=303)
 
@@ -420,8 +428,8 @@ async def edit_store(
     tenant_id = user["tenant_id"]
     store_service = StoreService(db)
 
-    # Get existing store
-    store = await store_service.get_store(tenant_id, store_id)
+    # Get existing store by database UUID
+    store = await store_service.get_store_by_db_id(tenant_id, store_id)
     if not store:
         return RedirectResponse(url="/webui/stores", status_code=303)
 
@@ -505,10 +513,22 @@ async def test_store_connection(
     """
     tenant_id = user["tenant_id"]
     store_service = StoreService(db)
+    
+    # Get tenant_key from session for decryption
+    tenant_key = user.get("tenant_key")
+    if not tenant_key:
+        logger.error("No tenant_key in session for store test")
+        return RedirectResponse(url=f"/webui/stores/{store_id}", status_code=303)
 
     try:
-        # Test the connection
-        result = await store_service.test_store_credentials(tenant_id, store_id)
+        # Get store by database UUID to get OrderDesk store_id
+        store = await store_service.get_store_by_db_id(tenant_id, store_id)
+        if not store:
+            logger.warning("Store not found for test", store_id=store_id)
+            return RedirectResponse(url="/webui/stores", status_code=303)
+        
+        # Test the connection using OrderDesk store_id
+        result = await store_service.test_store_credentials(tenant_id, store.store_id, tenant_key)
 
         if result:
             logger.info(
