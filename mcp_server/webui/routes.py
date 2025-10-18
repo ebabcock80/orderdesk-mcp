@@ -584,10 +584,10 @@ async def api_console(
             "description": "Set active store for session",
             "params": [
                 {
-                    "name": "store_name",
+                    "name": "store_identifier",
                     "type": "string",
                     "required": True,
-                    "placeholder": "My Store",
+                    "placeholder": "My Store or 12345",
                 }
             ],
         },
@@ -608,6 +608,12 @@ async def api_console(
             "description": "Get order by ID (cached 15s)",
             "params": [
                 {
+                    "name": "store_identifier",
+                    "type": "string",
+                    "required": False,
+                    "placeholder": "My Store or 12345 (optional if active store set)",
+                },
+                {
                     "name": "order_id",
                     "type": "string",
                     "required": True,
@@ -619,6 +625,12 @@ async def api_console(
             "name": "orders.list",
             "description": "List orders with pagination (cached 15s)",
             "params": [
+                {
+                    "name": "store_identifier",
+                    "type": "string",
+                    "required": False,
+                    "placeholder": "My Store or 12345 (optional if active store set)",
+                },
                 {
                     "name": "limit",
                     "type": "integer",
@@ -644,6 +656,12 @@ async def api_console(
             "description": "Create new order",
             "params": [
                 {
+                    "name": "store_identifier",
+                    "type": "string",
+                    "required": False,
+                    "placeholder": "My Store or 12345 (optional if active store set)",
+                },
+                {
                     "name": "order_data",
                     "type": "string",
                     "required": True,
@@ -655,6 +673,12 @@ async def api_console(
             "name": "orders.update",
             "description": "Update order (safe merge with retries)",
             "params": [
+                {
+                    "name": "store_identifier",
+                    "type": "string",
+                    "required": False,
+                    "placeholder": "My Store or 12345 (optional if active store set)",
+                },
                 {
                     "name": "order_id",
                     "type": "string",
@@ -674,6 +698,12 @@ async def api_console(
             "description": "Delete order",
             "params": [
                 {
+                    "name": "store_identifier",
+                    "type": "string",
+                    "required": False,
+                    "placeholder": "My Store or 12345 (optional if active store set)",
+                },
+                {
                     "name": "order_id",
                     "type": "string",
                     "required": True,
@@ -686,6 +716,12 @@ async def api_console(
             "description": "Get product by ID (cached 60s)",
             "params": [
                 {
+                    "name": "store_identifier",
+                    "type": "string",
+                    "required": False,
+                    "placeholder": "My Store or 12345 (optional if active store set)",
+                },
+                {
                     "name": "product_id",
                     "type": "string",
                     "required": True,
@@ -697,6 +733,12 @@ async def api_console(
             "name": "products.list",
             "description": "List products with search (cached 60s)",
             "params": [
+                {
+                    "name": "store_identifier",
+                    "type": "string",
+                    "required": False,
+                    "placeholder": "My Store or 12345 (optional if active store set)",
+                },
                 {
                     "name": "limit",
                     "type": "integer",
@@ -833,8 +875,9 @@ async def execute_tool(
                 "error_type": "AuthError",
             }
         
-        # Set tenant context (with dummy key for WebUI - encryption handled by OrderDesk API)
-        set_tenant(tenant_id, b"webui_session")
+        # Set tenant context (with properly sized dummy key for WebUI - encryption handled by OrderDesk API)
+        # AES-256 requires 32 bytes
+        set_tenant(tenant_id, b"webui_session" + b"\x00" * 19)  # Pad to 32 bytes
 
         # Execute tool
         start_time = time.perf_counter()
@@ -999,7 +1042,7 @@ async def user_details_page(
             "user": user,
             "target_user": user_details,
             "current_user_id": user["tenant_id"],
-            "now": datetime.now(UTC),
+            "now": datetime.now(UTC).replace(tzinfo=None),  # Naive for SQLite comparison
             "csrf_token": generate_csrf_token(),
         },
     )
