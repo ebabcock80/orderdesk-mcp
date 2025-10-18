@@ -67,6 +67,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev]
+      
+      - name: Prepare test environment
+        run: |
+          # Ensure clean test environment (remove any old databases)
+          rm -f data/app.db data/*.db-shm data/*.db-wal
+          mkdir -p data
           
       - name: Run tests with coverage
         env:
