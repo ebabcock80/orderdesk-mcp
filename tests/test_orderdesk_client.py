@@ -45,10 +45,11 @@ class TestOrderDeskClient:
         url = client._build_url("orders/123")
         assert url == "https://app.orderdesk.me/api/v2/orders/123"
 
-    def test_get_auth_params(self, client):
-        """Should return correct authentication parameters."""
-        params = client._get_auth_params()
-        assert params == {"store_id": "12345", "api_key": "test-api-key"}
+    def test_auth_headers(self, client):
+        """Should include authentication in headers."""
+        # Auth is now in headers, not query params
+        assert client.store_id == "12345"
+        assert client.api_key == "test-api-key"
 
 
 class TestHTTPMethods:
@@ -271,13 +272,13 @@ class TestErrorHandling:
             await client.list_orders(limit=0)
 
         assert exc_info.value.code == "INVALID_PARAMETER"
-        assert "1 and 100" in exc_info.value.message
+        assert "1 and 500" in exc_info.value.message
 
     @pytest.mark.asyncio
     async def test_parameter_validation_limit_too_high(self, client):
-        """Should reject limit > 100."""
+        """Should reject limit > 500."""
         with pytest.raises(OrderDeskError) as exc_info:
-            await client.list_orders(limit=150)
+            await client.list_orders(limit=501)
 
         assert exc_info.value.code == "INVALID_PARAMETER"
 

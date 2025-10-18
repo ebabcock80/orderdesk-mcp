@@ -472,7 +472,11 @@ class OrderDeskClient:
             ...
         }
         """
-        return await self.get(f"/orders/{order_id}")
+        response = await self.get(f"/orders/{order_id}")
+        # OrderDesk wraps single order responses in {status, execution_time, order}
+        if "order" in response:
+            return response["order"]
+        return response
 
     async def list_orders(
         self,
@@ -562,13 +566,13 @@ class OrderDeskClient:
             params["folder_id"] = folder_id
         if folder_name:
             params["folder_name"] = folder_name
-            
+
         # Source filters
         if source_id:
             params["source_id"] = source_id
         if source_name:
             params["source_name"] = source_name
-            
+
         # Date filters
         if search_start_date:
             params["search_start_date"] = search_start_date
@@ -578,7 +582,7 @@ class OrderDeskClient:
             params["modified_start_date"] = modified_start_date
         if modified_end_date:
             params["modified_end_date"] = modified_end_date
-            
+
         # Customer filters
         if email:
             params["email"] = email
@@ -592,7 +596,7 @@ class OrderDeskClient:
             params["customer_company"] = customer_company
         if customer_phone:
             params["customer_phone"] = customer_phone
-            
+
         # Shipping filters
         if shipping_first_name:
             params["shipping_first_name"] = shipping_first_name
@@ -602,13 +606,13 @@ class OrderDeskClient:
             params["shipping_company"] = shipping_company
         if shipping_phone:
             params["shipping_phone"] = shipping_phone
-            
+
         # Sorting
         if order_by:
             params["order_by"] = order_by
         if order:
             params["order"] = order
-            
+
         # Legacy filters
         if status:
             params["status"] = status
@@ -695,6 +699,12 @@ class OrderDeskClient:
         - 409 response indicates order changed since fetch
         - Caller should retry with fresh fetch
         """
+        logger.info(
+            "Sending order update to OrderDesk",
+            order_id=order_id,
+            order_data_fields=list(order_data.keys()),
+            order_data_size=len(str(order_data)),
+        )
         return await self.put(f"/orders/{order_id}", json=order_data)
 
     async def delete_order(self, order_id: str) -> dict[str, Any]:
@@ -745,6 +755,7 @@ class OrderDeskClient:
         - Top-level fields: Shallow merge (changes override original)
         - Arrays (order_items): Full replacement if provided
         - Nested objects (shipping_address): Shallow merge
+        - Notes: Append to existing notes array
         - Null values: Remove field (explicit deletion)
         - Omitted fields: Keep original value
 
@@ -759,27 +770,102 @@ class OrderDeskClient:
         original = {
             "email": "old@example.com",
             "order_total": 100.00,
-            "order_items": [...]
+            "order_items": [...],
+            "notes": [{"note": "existing note", "type": "system"}]
         }
         changes = {
-            "email": "new@example.com"
+            "email": "new@example.com",
+            "notes": "new note"
         }
         result = {
             "email": "new@example.com",  # Updated
             "order_total": 100.00,       # Preserved
-            "order_items": [...]         # Preserved
+            "order_items": [...],        # Preserved
+            "notes": [                   # Appended
+                {"note": "existing note", "type": "system"},
+                {"note": "new note", "type": "system"}
+            ]
         }
         """
         merged = original.copy()
 
+        logger.info(
+            "Starting order merge",
+            original_fields=list(original.keys()),
+            changes=changes,
+            changes_keys=list(changes.keys()),
+        )
+
         for key, value in changes.items():
             if value is None:
                 # Explicit null = remove field
+                logger.info(f"Removing field: {key}")
                 merged.pop(key, None)
+            elif key in ("notes", "order_notes"):
+                # Special handling for notes - append to existing notes with deduplication
+                existing_notes = merged.get(key, [])
+                logger.info(
+                    f"Merging notes field ({key})",
+                    existing_notes_count=(
+                        len(existing_notes)
+                        if isinstance(existing_notes, list)
+                        else "not_list"
+                    ),
+                    new_notes_value=value,
+                    new_notes_type=type(value).__name__,
+                )
+                if isinstance(existing_notes, list):
+                    new_notes = []
+
+                    # If value is a string, convert to note object
+                    if isinstance(value, str):
+                        new_notes = [{"content": value, "username": "System"}]
+                    elif isinstance(value, list):
+                        new_notes = value
+                    else:
+                        new_notes = [value]
+
+                    # Deduplicate: only add notes that don't already exist
+                    # Compare by content field (case-insensitive) to avoid duplicates
+                    existing_contents = {
+                        note.get("content", "").strip().lower()
+                        for note in existing_notes
+                        if isinstance(note, dict) and note.get("content")
+                    }
+
+                    added_count = 0
+                    for new_note in new_notes:
+                        if isinstance(new_note, dict):
+                            new_content = new_note.get("content", "").strip().lower()
+                            if new_content and new_content not in existing_contents:
+                                existing_notes.append(new_note)
+                                existing_contents.add(new_content)
+                                added_count += 1
+                            else:
+                                logger.info(
+                                    f"Skipping duplicate note: {new_note.get('content', '')[:50]}..."
+                                )
+
+                    merged[key] = existing_notes
+                    logger.info(
+                        f"Added {added_count} new notes (skipped {len(new_notes) - added_count} duplicates), total notes: {len(merged[key])}"
+                    )
+                else:
+                    # If existing notes is not a list, replace it
+                    merged[key] = value if isinstance(value, list) else [value]
+                    logger.info(f"Replaced non-list notes with: {type(merged[key])}")
             else:
-                # Override with new value
+                # Override with new value for all other fields
+                logger.info(
+                    f"Overriding field {key}: {type(original.get(key, 'missing'))} -> {type(value)}"
+                )
                 merged[key] = value
 
+        logger.info(
+            "Order merge completed",
+            merged_fields=list(merged.keys()),
+            merged_size=len(str(merged)),
+        )
         return merged
 
     async def update_order_with_retry(
@@ -815,9 +901,22 @@ class OrderDeskClient:
             try:
                 # Step 1: Fetch current state
                 current_order = await self.fetch_full_order(order_id)
+                logger.info(
+                    "Fetched current order for merge",
+                    order_id=order_id,
+                    current_fields=list(current_order.keys()),
+                    current_order_size=len(str(current_order)),
+                )
 
                 # Step 2: Merge changes
                 merged_order = self.merge_order_changes(current_order, changes)
+                logger.info(
+                    "Merged order changes",
+                    order_id=order_id,
+                    changes=changes,
+                    merged_fields=list(merged_order.keys()),
+                    merged_order_size=len(str(merged_order)),
+                )
 
                 # Step 3: Upload full object
                 updated_order = await self.update_order(order_id, merged_order)
@@ -875,7 +974,7 @@ class OrderDeskClient:
     async def get_store_config(self) -> dict[str, Any]:
         """
         Get store configuration including folders and settings.
-        
+
         Returns:
             {
                 "store": {
@@ -887,7 +986,7 @@ class OrderDeskClient:
             }
         """
         return await self.get("/store")
-    
+
     async def get_product(self, product_id: str) -> dict[str, Any]:
         """
         Get a single product by ID.
@@ -992,7 +1091,9 @@ class OrderDeskClient:
             logger.warning(
                 "Unexpected OrderDesk response format for products",
                 response_type=type(response).__name__,
-                response_keys=list(response.keys()) if isinstance(response, dict) else None,
+                response_keys=(
+                    list(response.keys()) if isinstance(response, dict) else None
+                ),
             )
             products = []
 

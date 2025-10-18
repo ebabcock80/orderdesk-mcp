@@ -9,7 +9,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=".env", case_sensitive=False, extra="ignore"
+    )
 
     # =========================================================================
     # Server Configuration
@@ -123,7 +125,7 @@ class Settings(BaseSettings):
         default=None,
         description="Admin master key for guaranteed access (auto-provisions on startup)",
     )
-    
+
     # MCP Client Configuration
     public_url: str = Field(
         default="http://localhost:8080",

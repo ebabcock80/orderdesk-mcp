@@ -263,7 +263,6 @@ class TestUpdateOrderMCP:
                     )
 
                     with patch("mcp_server.routers.orders.cache_manager") as mock_cache:
-                        mock_cache.delete = AsyncMock()
                         mock_cache.invalidate_pattern = AsyncMock()
 
                         with patch(
@@ -285,7 +284,6 @@ class TestUpdateOrderMCP:
                             assert result["status"] == "success"
                             assert result["order"]["email"] == "newemail@example.com"
                             # Verify cache was invalidated
-                            assert mock_cache.delete.called
                             assert mock_cache.invalidate_pattern.called
 
 
@@ -318,7 +316,6 @@ class TestDeleteOrderMCP:
                     )
 
                     with patch("mcp_server.routers.orders.cache_manager") as mock_cache:
-                        mock_cache.delete = AsyncMock()
                         mock_cache.invalidate_pattern = AsyncMock()
 
                         with patch(
@@ -337,7 +334,6 @@ class TestDeleteOrderMCP:
                             assert result["status"] == "success"
                             assert "deleted successfully" in result["message"]
                             # Verify cache was invalidated
-                            assert mock_cache.delete.called
                             assert mock_cache.invalidate_pattern.called
 
 

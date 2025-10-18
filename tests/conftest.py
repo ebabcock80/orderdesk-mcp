@@ -8,6 +8,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+# Set test environment before importing app
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+
 from mcp_server.main import app
 from mcp_server.models.database import Base, get_db
 

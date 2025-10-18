@@ -303,6 +303,14 @@ class CacheManager:
         CACHE_ITEMS.labels(resource_type=resource_type).inc()
         logger.debug("cache_set", endpoint=endpoint, tenant_id=tenant_id, ttl=ttl)
 
+    async def invalidate_pattern(self, pattern: str) -> None:
+        """Invalidate cache entries matching a pattern."""
+        await self.backend.invalidate_pattern(pattern)
+
+        # Record cache invalidation
+        CACHE_OPERATIONS.labels(operation="invalidate", resource_type="pattern").inc()
+        logger.debug("cache_invalidate_pattern", pattern=pattern)
+
     async def invalidate_store(self, tenant_id: str, store_id: str) -> None:
         """Invalidate all cache entries for a store."""
         pattern = f"{tenant_id}:{store_id}:"

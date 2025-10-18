@@ -50,16 +50,18 @@ async def authenticate_request(request: Request) -> Tenant:
     # Try Authorization header first
     auth_header = request.headers.get("Authorization")
     master_key = None
-    
+
     if auth_header and auth_header.startswith("Bearer "):
         master_key = auth_header[7:]  # Remove "Bearer " prefix
-    
+
     # If no header, try query parameter (for mcp-remote compatibility)
     if not master_key:
         master_key = request.query_params.get("token")
-    
+
     if not master_key:
-        raise AuthError("Missing master key in Authorization header or token query parameter")
+        raise AuthError(
+            "Missing master key in Authorization header or token query parameter"
+        )
 
     # Get database session
     db = next(get_db())

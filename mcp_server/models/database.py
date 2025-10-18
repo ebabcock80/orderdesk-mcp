@@ -112,7 +112,9 @@ class Store(Base):
     api_key_nonce = Column(String(255), nullable=False)  # Base64-encoded nonce/IV
 
     # Cached OrderDesk store configuration (fetched from /api/v2/store)
-    store_config = Column(Text, nullable=True)  # JSON: {folders: {id: name}, settings: {...}}
+    store_config = Column(
+        Text, nullable=True
+    )  # JSON: {folders: {id: name}, settings: {...}}
     config_fetched_at = Column(DateTime, nullable=True)  # Last time config was fetched
 
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)

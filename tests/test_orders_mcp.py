@@ -181,7 +181,7 @@ class TestListOrdersMCP:
             store_identifier="production",
             limit=50,
             offset=0,
-            folder_id=5,
+            folder_id="5",
             status="open",
             search="urgent",
         )
@@ -216,9 +216,32 @@ class TestListOrdersMCP:
 
                     await list_orders_mcp(params, mock_db)
 
-                    # Verify filters were passed
+                    # Verify filters were passed (with all new filter parameters)
                     mock_client_instance.list_orders.assert_called_once_with(
-                        limit=50, offset=0, folder_id=5, status="open", search="urgent"
+                        limit=50,
+                        offset=0,
+                        folder_id="5",
+                        folder_name=None,
+                        source_id=None,
+                        source_name=None,
+                        search_start_date=None,
+                        search_end_date=None,
+                        modified_start_date=None,
+                        modified_end_date=None,
+                        email=None,
+                        customer_id=None,
+                        customer_first_name=None,
+                        customer_last_name=None,
+                        customer_company=None,
+                        customer_phone=None,
+                        shipping_first_name=None,
+                        shipping_last_name=None,
+                        shipping_company=None,
+                        shipping_phone=None,
+                        order_by=None,
+                        order=None,
+                        status="open",
+                        search="urgent",
                     )
 
 

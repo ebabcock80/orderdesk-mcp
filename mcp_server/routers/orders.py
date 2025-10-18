@@ -626,39 +626,61 @@ class ListOrdersParams(BaseModel):
         50, ge=1, le=500, description="Number of orders to return (1-500, default 50)"
     )
     offset: int = Field(0, ge=0, description="Number of orders to skip (default 0)")
-    
+
     # Folder filters
-    folder_id: str | None = Field(None, description="Filter by folder ID (can be comma-separated: '1004,1009')")
+    folder_id: str | None = Field(
+        None, description="Filter by folder ID (can be comma-separated: '1004,1009')"
+    )
     folder_name: str | None = Field(None, description="Filter by exact folder name")
-    
+
     # Source filters
     source_id: str | None = Field(None, description="Filter by source ID")
     source_name: str | None = Field(None, description="Filter by source name")
-    
+
     # Date filters
-    search_start_date: str | None = Field(None, description="Start date (YYYY-MM-DD HH:MM:SS UTC)")
-    search_end_date: str | None = Field(None, description="End date (YYYY-MM-DD HH:MM:SS UTC)")
-    modified_start_date: str | None = Field(None, description="Modified after (YYYY-MM-DD HH:MM:SS UTC)")
-    modified_end_date: str | None = Field(None, description="Modified before (YYYY-MM-DD HH:MM:SS UTC)")
-    
+    search_start_date: str | None = Field(
+        None, description="Start date (YYYY-MM-DD HH:MM:SS UTC)"
+    )
+    search_end_date: str | None = Field(
+        None, description="End date (YYYY-MM-DD HH:MM:SS UTC)"
+    )
+    modified_start_date: str | None = Field(
+        None, description="Modified after (YYYY-MM-DD HH:MM:SS UTC)"
+    )
+    modified_end_date: str | None = Field(
+        None, description="Modified before (YYYY-MM-DD HH:MM:SS UTC)"
+    )
+
     # Customer filters
     email: str | None = Field(None, description="Filter by customer email")
     customer_id: str | None = Field(None, description="Filter by customer ID")
-    customer_first_name: str | None = Field(None, description="Search customer first name")
-    customer_last_name: str | None = Field(None, description="Search customer last name")
+    customer_first_name: str | None = Field(
+        None, description="Search customer first name"
+    )
+    customer_last_name: str | None = Field(
+        None, description="Search customer last name"
+    )
     customer_company: str | None = Field(None, description="Search customer company")
     customer_phone: str | None = Field(None, description="Search customer phone")
-    
+
     # Shipping filters
-    shipping_first_name: str | None = Field(None, description="Search shipping first name")
-    shipping_last_name: str | None = Field(None, description="Search shipping last name")
+    shipping_first_name: str | None = Field(
+        None, description="Search shipping first name"
+    )
+    shipping_last_name: str | None = Field(
+        None, description="Search shipping last name"
+    )
     shipping_company: str | None = Field(None, description="Search shipping company")
     shipping_phone: str | None = Field(None, description="Search shipping phone")
-    
+
     # Sorting
-    order_by: str | None = Field(None, description="Order by field (default: date_added)")
-    order: str | None = Field(None, description="Sort direction: ASC or DESC (default: DESC)")
-    
+    order_by: str | None = Field(
+        None, description="Order by field (default: date_added)"
+    )
+    order: str | None = Field(
+        None, description="Sort direction: ASC or DESC (default: DESC)"
+    )
+
     # Legacy
     status: str | None = Field(
         None, description="Filter by status (e.g., 'open', 'completed', 'cancelled')"
@@ -940,11 +962,14 @@ async def list_orders_mcp(
     except (NotFoundError, ValidationError):
         raise
     except OrderDeskError as e:
-        logger.error("OrderDesk API error", error=str(e), code=e.code, details=e.details)
+        logger.error(
+            "OrderDesk API error", error=str(e), code=e.code, details=e.details
+        )
         raise ValidationError(f"Failed to list orders: {e.message}")
     except Exception as e:
         logger.error("Failed to list orders", error=str(e), error_type=type(e).__name__)
         import traceback
+
         logger.error("Full traceback", traceback=traceback.format_exc())
         raise ValidationError(f"Failed to list orders: {type(e).__name__}: {str(e)}")
 
@@ -1175,7 +1200,7 @@ async def update_order_mcp(
             )
 
             # Invalidate cache for this order and list queries
-            await cache_manager.delete(
+            await cache_manager.invalidate_pattern(
                 f"{tenant_id}:{store.store_id}:orders/{params.order_id}"
             )
             await cache_manager.invalidate_pattern(
@@ -1260,7 +1285,7 @@ async def delete_order_mcp(
             await client.delete_order(params.order_id)
 
             # Invalidate cache for this order and list queries
-            await cache_manager.delete(
+            await cache_manager.invalidate_pattern(
                 f"{tenant_id}:{store.store_id}:orders/{params.order_id}"
             )
             await cache_manager.invalidate_pattern(

@@ -42,7 +42,13 @@ from mcp_server.auth.middleware import auth_middleware
 from mcp_server.config import settings
 from mcp_server.models.common import AuthError
 from mcp_server.models.database import create_tables
-from mcp_server.routers import health, orders, products, stores, mcp_http  # webhooks - Phase 5+
+from mcp_server.routers import (
+    health,
+    mcp_http,
+    orders,
+    products,
+    stores,
+)  # webhooks - Phase 5+
 from mcp_server.utils.logging import logger
 from mcp_server.utils.metrics import (
     REQUEST_COUNT,

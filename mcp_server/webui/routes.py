@@ -93,10 +93,10 @@ async def login(
     # Derive tenant key for credential decryption
     from mcp_server.auth import crypto
     from mcp_server.services.tenant import TenantService
-    
+
     tenant_service = TenantService(db)
     tenant = tenant_service.get_tenant_by_id(tenant_id)
-    
+
     if not tenant:
         new_csrf = generate_csrf_token()
         return get_templates().TemplateResponse(
@@ -104,7 +104,7 @@ async def login(
             {"request": request, "csrf_token": new_csrf, "error": "Tenant not found."},
             status_code=401,
         )
-    
+
     # Derive real tenant key from master key + salt
     tenant_key = crypto.derive_tenant_key(master_key, str(tenant.salt))
 
@@ -251,7 +251,7 @@ async def add_store(
     """
     tenant_id = str(user["tenant_id"])
     store_service = StoreService(db)
-    
+
     # Get tenant_key from session for encryption
     tenant_key = user.get("tenant_key")
     if not tenant_key:
@@ -286,10 +286,12 @@ async def add_store(
             tenant_id=tenant_id,
             store_name=store_name,
         )
-        
+
         # Fetch and cache store config (folders, settings)
         try:
-            await store_service.fetch_and_cache_store_config(tenant_id, new_store.id, tenant_key)
+            await store_service.fetch_and_cache_store_config(
+                tenant_id, new_store.id, tenant_key
+            )
         except Exception as config_err:
             # Don't fail registration if config fetch fails
             logger.warning("Failed to fetch store config", error=str(config_err))
@@ -340,14 +342,21 @@ async def delete_store(
     try:
         # Get store by database UUID first
         store = await store_service.get_store_by_db_id(tenant_id, str(store_id))
-        
+
         if store:
             # Delete using the database record
             db.delete(store)
             db.commit()
-            logger.info("Store deleted via WebUI", tenant_id=tenant_id, store_id=store_id, store_name=store.store_name)
+            logger.info(
+                "Store deleted via WebUI",
+                tenant_id=tenant_id,
+                store_id=store_id,
+                store_name=store.store_name,
+            )
         else:
-            logger.warning("Store not found for deletion", tenant_id=tenant_id, store_id=store_id)
+            logger.warning(
+                "Store not found for deletion", tenant_id=tenant_id, store_id=store_id
+            )
     except Exception as e:
         logger.error("Failed to delete store via WebUI", error=str(e))
         db.rollback()
@@ -477,7 +486,7 @@ async def edit_store(
             tenant_key = user.get("tenant_key")
             if not tenant_key:
                 raise ValueError("No tenant_key in session - cannot encrypt API key")
-            
+
             from mcp_server.auth import crypto
 
             ciphertext, tag, nonce = crypto.encrypt_api_key(api_key, tenant_key)
@@ -537,7 +546,7 @@ async def test_store_connection(
     """
     tenant_id = user["tenant_id"]
     store_service = StoreService(db)
-    
+
     # Get tenant_key from session for decryption
     tenant_key = user.get("tenant_key")
     if not tenant_key:
@@ -550,9 +559,11 @@ async def test_store_connection(
         if not store:
             logger.warning("Store not found for test", store_id=store_id)
             return RedirectResponse(url="/webui/stores", status_code=303)
-        
+
         # Test the connection using OrderDesk store_id
-        result = await store_service.test_store_credentials(tenant_id, store.store_id, tenant_key)
+        result = await store_service.test_store_credentials(
+            tenant_id, store.store_id, tenant_key
+        )
 
         if result:
             logger.info(
@@ -560,12 +571,16 @@ async def test_store_connection(
                 tenant_id=tenant_id,
                 store_id=store_id,
             )
-            
+
             # Fetch and cache store config after successful test
             try:
-                await store_service.fetch_and_cache_store_config(tenant_id, store_id, tenant_key)
+                await store_service.fetch_and_cache_store_config(
+                    tenant_id, store_id, tenant_key
+                )
             except Exception as config_err:
-                logger.warning("Failed to fetch store config after test", error=str(config_err))
+                logger.warning(
+                    "Failed to fetch store config after test", error=str(config_err)
+                )
         else:
             logger.warning(
                 "Store connection test failed",
@@ -686,7 +701,7 @@ async def api_console(
                     "type": "string",
                     "required": True,
                     "placeholder": "123456",
-                }
+                },
             ],
         },
         "orders.list": {
@@ -734,7 +749,7 @@ async def api_console(
                     "type": "string",
                     "required": True,
                     "placeholder": '{"email": "customer@example.com", "order_items": [...]}',
-                }
+                },
             ],
         },
         "orders.update": {
@@ -776,7 +791,7 @@ async def api_console(
                     "type": "string",
                     "required": True,
                     "placeholder": "123456",
-                }
+                },
             ],
         },
         "products.get": {
@@ -794,7 +809,7 @@ async def api_console(
                     "type": "string",
                     "required": True,
                     "placeholder": "product-123",
-                }
+                },
             ],
         },
         "products.list": {
@@ -865,13 +880,6 @@ async def execute_tool(
     import time
 
     from mcp_server.routers import orders, products, stores
-    from mcp_server.routers.stores import (
-        DeleteStoreParams,
-        RegisterStoreParams,
-        ResolveStoreParams,
-        UseMasterKeyParams,
-        UseStoreParams,
-    )
     from mcp_server.routers.orders import (
         CreateOrderParams,
         DeleteOrderParams,
@@ -880,6 +888,13 @@ async def execute_tool(
         UpdateOrderParams,
     )
     from mcp_server.routers.products import GetProductParams, ListProductsParams
+    from mcp_server.routers.stores import (
+        DeleteStoreParams,
+        RegisterStoreParams,
+        ResolveStoreParams,
+        UseMasterKeyParams,
+        UseStoreParams,
+    )
 
     try:
         # Parse request body
@@ -929,24 +944,24 @@ async def execute_tool(
         # Get tenant and derive key (needed for encrypted fields)
         # Since WebUI doesn't store the master key, we need to fetch tenant directly
         tenant_id = str(user["tenant_id"])
-        
+
         # For WebUI, set tenant context without requiring master key re-authentication
         # Note: We use a dummy key since WebUI tools don't encrypt/decrypt data
         # Real encryption happens in the OrderDesk API calls, not in tool layer
         tenant_service = TenantService(db)
         tenant = tenant_service.get_tenant_by_id(tenant_id)
-        
+
         if not tenant:
             return {
                 "success": False,
                 "error": "Tenant not found",
                 "error_type": "AuthError",
             }
-        
+
         # Set tenant context with REAL tenant key from session (for credential decryption)
         # Extract tenant_key from session payload (stored during login)
         tenant_key = user.get("tenant_key")
-        
+
         if not tenant_key:
             # Old session doesn't have tenant_key - user needs to log out and log in again
             logger.error(
@@ -958,8 +973,12 @@ async def execute_tool(
                 "error": "Session missing tenant_key. Please log out and log in again to get a fresh session.",
                 "error_type": "AuthError",
             }
-        
-        logger.info("Using tenant_key from session", has_key=bool(tenant_key), key_len=len(tenant_key))
+
+        logger.info(
+            "Using tenant_key from session",
+            has_key=bool(tenant_key),
+            key_len=len(tenant_key),
+        )
         set_tenant(tenant_id, tenant_key)
 
         # Execute tool
@@ -986,7 +1005,7 @@ async def execute_tool(
         # Console uses 'store_identifier' for UX clarity, but models use different names
         param_mapping = {
             "stores.use_store": {"store_identifier": "identifier"},
-            "stores.resolve": {"store_identifier": "identifier"},  
+            "stores.resolve": {"store_identifier": "identifier"},
             "orders.list": {"store_identifier": "store_identifier"},  # Already correct
             "orders.get": {"store_identifier": "store_identifier"},
             "orders.create": {"store_identifier": "store_identifier"},
@@ -995,7 +1014,7 @@ async def execute_tool(
             "products.list": {"store_identifier": "store_identifier"},
             "products.get": {"store_identifier": "store_identifier"},
         }
-        
+
         # Apply parameter name mapping if needed
         if tool_name in param_mapping:
             mapping = param_mapping[tool_name]
@@ -1050,8 +1069,7 @@ async def settings_page(
         Settings HTML page
     """
     import json
-    from mcp_server.services.tenant import TenantService
-    
+
     # Server configuration
     config = {
         "cache_backend": settings.cache_backend,
@@ -1062,14 +1080,14 @@ async def settings_page(
         "version": "0.1.0-alpha",
         "public_url": settings.public_url,
     }
-    
+
     # MCP configuration template for Claude Desktop/ChatGPT
     # Use PUBLIC_URL from settings, not request URL (for Docker/reverse proxy scenarios)
     server_url = settings.public_url
-    
+
     # Fixed MCP server name
     mcp_server_name = "OrderDesk"
-    
+
     mcp_config = {
         "mcpServers": {
             mcp_server_name: {
@@ -1077,15 +1095,13 @@ async def settings_page(
                 "args": [
                     "-y",
                     "@modelcontextprotocol/server-fetch",
-                    f"{server_url}/mcp"
+                    f"{server_url}/mcp",
                 ],
-                "env": {
-                    "ORDERDESK_MASTER_KEY": "YOUR_MASTER_KEY_HERE"
-                }
+                "env": {"ORDERDESK_MASTER_KEY": "YOUR_MASTER_KEY_HERE"},
             }
         }
     }
-    
+
     # Pretty-printed JSON for copy/paste
     mcp_config_json = json.dumps(mcp_config, indent=2)
 
@@ -1193,7 +1209,9 @@ async def user_details_page(
             "user": user,
             "target_user": user_details,
             "current_user_id": user["tenant_id"],
-            "now": datetime.now(UTC).replace(tzinfo=None),  # Naive for SQLite comparison
+            "now": datetime.now(UTC).replace(
+                tzinfo=None
+            ),  # Naive for SQLite comparison
             "csrf_token": generate_csrf_token(),
         },
     )
@@ -1230,7 +1248,9 @@ async def delete_user(
     success = await user_service.delete_user(user_id, deleted_by=user["tenant_id"])
 
     if success:
-        logger.info("User deleted via WebUI", user_id=user_id, deleted_by=user["tenant_id"])
+        logger.info(
+            "User deleted via WebUI", user_id=user_id, deleted_by=user["tenant_id"]
+        )
         return RedirectResponse(
             url="/webui/users?success=user_deleted", status_code=303
         )
