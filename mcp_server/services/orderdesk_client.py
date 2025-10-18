@@ -829,7 +829,7 @@ class OrderDeskClient:
             "description": "High-quality widget"
         }
         """
-        return await self.get(f"/inventory/{product_id}")
+        return await self.get(f"/inventory-items/{product_id}")
 
     async def list_products(
         self, limit: int = 50, offset: int = 0, search: str | None = None
@@ -894,22 +894,21 @@ class OrderDeskClient:
         if search:
             params["search"] = search
 
-        # Make request
-        response = await self.get("/inventory", params=params)
+        # Make request (correct endpoint: /inventory-items, not /inventory)
+        response = await self.get("/inventory-items", params=params)
 
-        # OrderDesk returns products in the root or in a "products" key
-        # Handle both formats
-        if isinstance(response, list):  # type: ignore[unreachable]
+        # OrderDesk returns inventory_items in response
+        if isinstance(response, dict) and "inventory_items" in response:
+            products = response["inventory_items"]
+        elif isinstance(response, list):  # type: ignore[unreachable]
             products = response  # type: ignore[unreachable]
         elif isinstance(response, dict) and "products" in response:
             products = response["products"]
-        elif isinstance(response, dict) and "inventory" in response:
-            # OrderDesk might use "inventory" key
-            products = response["inventory"]
         else:
             logger.warning(
                 "Unexpected OrderDesk response format for products",
                 response_type=type(response).__name__,
+                response_keys=list(response.keys()) if isinstance(response, dict) else None,
             )
             products = []
 
