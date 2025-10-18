@@ -273,7 +273,7 @@ async def add_store(
 
 @router.post("/stores/{store_id}/delete")
 async def delete_store(
-    store_id: int,
+    store_id: str,
     csrf_token: str = Form(...),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -306,7 +306,7 @@ async def delete_store(
 @router.get("/stores/{store_id}", response_class=HTMLResponse)
 async def store_details(
     request: Request,
-    store_id: int,
+    store_id: str,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -345,7 +345,7 @@ async def store_details(
 @router.get("/stores/{store_id}/edit", response_class=HTMLResponse)
 async def edit_store_form(
     request: Request,
-    store_id: int,
+    store_id: str,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -373,7 +373,7 @@ async def edit_store_form(
 @router.post("/stores/{store_id}/edit")
 async def edit_store(
     request: Request,
-    store_id: int,
+    store_id: str,
     store_name: str = Form(...),
     label: str = Form(None),
     store_id_new: str = Form(None, alias="store_id"),
@@ -468,7 +468,7 @@ async def edit_store(
 
 @router.post("/stores/{store_id}/test")
 async def test_store_connection(
-    store_id: int,
+    store_id: str,
     csrf_token: str = Form(...),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -596,10 +596,10 @@ async def api_console(
             "description": "Resolve store by name (debug)",
             "params": [
                 {
-                    "name": "store_name",
+                    "name": "store_identifier",
                     "type": "string",
                     "required": True,
-                    "placeholder": "My Store",
+                    "placeholder": "My Store or 12345",
                 }
             ],
         },
@@ -889,6 +889,30 @@ async def execute_tool(
                     params[key] = json_module.loads(value)
                 except json_module.JSONDecodeError:
                     pass  # Keep as string if not valid JSON
+
+        # Map console parameter names to actual Pydantic model parameter names
+        # Console uses 'store_identifier' for UX clarity, but models use different names
+        param_mapping = {
+            "stores.use_store": {"store_identifier": "identifier"},
+            "stores.resolve": {"store_identifier": "identifier"},  
+            "orders.list": {"store_identifier": "store_identifier"},  # Already correct
+            "orders.get": {"store_identifier": "store_identifier"},
+            "orders.create": {"store_identifier": "store_identifier"},
+            "orders.update": {"store_identifier": "store_identifier"},
+            "orders.delete": {"store_identifier": "store_identifier"},
+            "products.list": {"store_identifier": "store_identifier"},
+            "products.get": {"store_identifier": "store_identifier"},
+        }
+        
+        # Apply parameter name mapping if needed
+        if tool_name in param_mapping:
+            mapping = param_mapping[tool_name]
+            mapped_params = {}
+            for key, value in params.items():
+                # Map the parameter name if a mapping exists
+                new_key = mapping.get(key, key)
+                mapped_params[new_key] = value
+            params = mapped_params
 
         # Convert params dict to Pydantic model instance
         if param_model:
