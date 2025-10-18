@@ -48,7 +48,8 @@ class TenantService:
         tenants = self.db.query(Tenant).all()
 
         for tenant in tenants:
-            if crypto.verify_master_key(master_key, tenant.master_key_hash):
+            # Type assertion: SQLAlchemy columns are actually str values at runtime
+            if crypto.verify_master_key(master_key, str(tenant.master_key_hash)):
                 logger.info("Tenant authenticated", tenant_id=tenant.id)
                 return tenant
 

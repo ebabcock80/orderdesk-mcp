@@ -80,14 +80,13 @@ async def list_stores(
         tenant_id = request.state.tenant_id
         store_service = StoreService(db)
         stores = await store_service.list_stores(tenant_id)
-        # Convert to response format
+        # Convert to response format (cast Column types to Python types for mypy)
         return [
             StoreResponse(
-                id=s.id,
-                store_id=s.store_id,
-                store_name=s.store_name,
-                label=s.label,
-                created_at=s.created_at,
+                id=str(s.id),
+                store_id=str(s.store_id),
+                label=str(s.label) if s.label else None,
+                created_at=s.created_at,  # type: ignore[arg-type]
             )
             for s in stores
         ]
@@ -233,13 +232,14 @@ async def use_master_key(
             raise AuthError("Invalid master key and auto-provision disabled")
 
         # Derive tenant encryption key
-        tenant_key = crypto.derive_tenant_key(params.master_key, tenant.salt)
+        # Type assertion: SQLAlchemy columns are str values at runtime
+        tenant_key = crypto.derive_tenant_key(params.master_key, str(tenant.salt))
 
         # Set session context
-        set_tenant(tenant.id, tenant_key)
+        set_tenant(str(tenant.id), tenant_key)
 
         # Count stores
-        stores = await StoreService(db).list_stores(tenant.id)
+        stores = await StoreService(db).list_stores(str(tenant.id))
 
         logger.info("Master key authentication successful", tenant_id=tenant.id)
 
@@ -394,7 +394,7 @@ async def use_store(params: UseStoreParams, db: Session = Depends(get_db)) -> di
             raise NotFoundError("Store", params.identifier)
 
         # Set as active store in session
-        set_active_store(store.id)
+        set_active_store(str(store.id))
 
         logger.info(
             "Active store set",

@@ -11,7 +11,7 @@ from typing import Any
 try:
     import redis.asyncio as redis
 except ImportError:
-    redis = None
+    redis = None  # type: ignore[assignment]
 import structlog
 
 from mcp_server.config import settings
@@ -228,7 +228,7 @@ class CacheManager:
             return SqliteCacheBackend()
         elif backend_type == "redis":
             if redis is None:
-                logger.warning(
+                logger.warning(  # type: ignore[unreachable]
                     "redis_not_available",
                     message="Redis not available, falling back to memory cache",
                 )

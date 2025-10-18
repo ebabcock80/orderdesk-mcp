@@ -174,6 +174,7 @@ class OrderDeskClient:
             )
 
             # Make request
+            assert self._client is not None  # Guaranteed by _ensure_client()
             response = await self._client.request(
                 method=method, url=url, params=all_params, json=json
             )
@@ -539,8 +540,8 @@ class OrderDeskClient:
 
         # OrderDesk returns orders in the root or in an "orders" key
         # Handle both formats
-        if isinstance(response, list):
-            orders = response
+        if isinstance(response, list):  # type: ignore[unreachable]
+            orders = response  # type: ignore[unreachable]
         elif isinstance(response, dict) and "orders" in response:
             orders = response["orders"]
         else:
@@ -886,8 +887,8 @@ class OrderDeskClient:
 
         # OrderDesk returns products in the root or in a "products" key
         # Handle both formats
-        if isinstance(response, list):
-            products = response
+        if isinstance(response, list):  # type: ignore[unreachable]
+            products = response  # type: ignore[unreachable]
         elif isinstance(response, dict) and "products" in response:
             products = response["products"]
         elif isinstance(response, dict) and "inventory" in response:

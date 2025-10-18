@@ -62,7 +62,7 @@ class ValidationError(MCPError):
         invalid_fields: dict[str, str] | None = None,
         example: dict[str, Any] | None = None,
     ):
-        details = {}
+        details: dict[str, Any] = {}
         if missing_fields:
             details["missing_fields"] = missing_fields
         if invalid_fields:

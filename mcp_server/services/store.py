@@ -65,9 +65,8 @@ class StoreService:
             tenant = self.db.query(Tenant).filter(Tenant.id == tenant_id).first()
             if not tenant:
                 raise NotFoundError("Tenant", tenant_id)
-            tenant_key = crypto.derive_tenant_key(
-                api_key, tenant.salt
-            )  # Derive from master key
+            # Type assertion: SQLAlchemy columns are str values at runtime
+            tenant_key = crypto.derive_tenant_key(api_key, str(tenant.salt))
 
         # Default store_name to store_id
         if not store_name:
@@ -232,11 +231,15 @@ class StoreService:
             Exception: If decryption fails (tampered data or wrong key)
         """
         # Decrypt API key using AES-256-GCM
+        # Type assertions: SQLAlchemy columns are str values at runtime
         api_key = crypto.decrypt_api_key(
-            store.api_key_ciphertext, store.api_key_tag, store.api_key_nonce, tenant_key
+            str(store.api_key_ciphertext),
+            str(store.api_key_tag),
+            str(store.api_key_nonce),
+            tenant_key,
         )
 
-        return store.store_id, api_key
+        return str(store.store_id), api_key
 
     async def test_store_credentials(
         self, tenant_id: str, store_id: str, tenant_key: bytes
@@ -250,7 +253,7 @@ class StoreService:
         Returns:
             {"status": "success"/"error", "message": "..."}
         """
-        from mcp_server.services.orderdesk import OrderDeskClient
+        from mcp_server.services.orderdesk_client import OrderDeskClient
 
         store = await self.get_store(tenant_id, store_id)
         if not store:

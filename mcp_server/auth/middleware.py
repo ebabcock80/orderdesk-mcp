@@ -26,7 +26,8 @@ async def get_tenant_from_master_key(
     crypto_manager = get_crypto_manager()
     for tenant in db.query(Tenant).all():
         # Bcrypt hash includes salt, so we only need the hash for verification
-        if crypto_manager.verify_master_key(master_key, tenant.master_key_hash):
+        # Type assertion: SQLAlchemy columns are str values at runtime
+        if crypto_manager.verify_master_key(master_key, str(tenant.master_key_hash)):
             return tenant
 
     # Auto-provision new tenant if enabled

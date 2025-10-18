@@ -203,7 +203,7 @@ class Settings(BaseSettings):
         """Parse comma-separated allowed origins."""
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
+        return v  # type: ignore[unreachable]
 
     @field_validator("log_level")
     @classmethod
@@ -242,5 +242,5 @@ class Settings(BaseSettings):
         return v
 
 
-# Global settings instance
-settings = Settings()
+# Global settings instance (loads from environment variables)
+settings = Settings()  # type: ignore[call-arg]
