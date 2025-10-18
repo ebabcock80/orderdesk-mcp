@@ -65,7 +65,7 @@ def provision_admin_user():
     if not settings.admin_master_key:
         return
 
-    from mcp_server.auth.crypto import hash_master_key
+    from mcp_server.auth.crypto import hash_master_key, verify_master_key
     from mcp_server.models.database import Tenant, get_db
 
     logger.info(
@@ -77,23 +77,20 @@ def provision_admin_user():
     db = next(get_db())
 
     try:
-        # Check if admin user already exists by trying to authenticate
-        from mcp_server.webui.auth import auth_manager
+        # Check if any tenant matches the admin master key (synchronously)
+        # We'll hash the key and check all tenants to see if it already exists
+        tenants = db.query(Tenant).all()
 
-        # Use a blocking call (sync) since this is startup
-        import asyncio
-
-        success, tenant_id = asyncio.run(
-            auth_manager.authenticate_master_key(settings.admin_master_key, db)
-        )
-
-        if success and tenant_id:
-            logger.info(
-                "admin_provisioning",
-                message="Admin account already exists",
-                tenant_id=tenant_id,
-            )
-            return
+        for tenant in tenants:
+            # Verify if this tenant has the admin master key
+            if verify_master_key(settings.admin_master_key, tenant.master_key_hash):
+                logger.info(
+                    "admin_provisioning",
+                    message="Admin account already exists",
+                    tenant_id=tenant.id,
+                    email=tenant.email or "No email",
+                )
+                return
 
         # Admin doesn't exist, create it
         master_key_hash, salt = hash_master_key(settings.admin_master_key)
