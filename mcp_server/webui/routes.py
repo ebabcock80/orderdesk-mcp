@@ -755,6 +755,21 @@ async def execute_tool(
     import time
 
     from mcp_server.routers import orders, products, stores
+    from mcp_server.routers.stores import (
+        DeleteStoreParams,
+        RegisterStoreParams,
+        ResolveStoreParams,
+        UseMasterKeyParams,
+        UseStoreParams,
+    )
+    from mcp_server.routers.orders import (
+        CreateOrderParams,
+        DeleteOrderParams,
+        GetOrderParams,
+        ListOrdersParams,
+        UpdateOrderParams,
+    )
+    from mcp_server.routers.products import GetProductParams, ListProductsParams
 
     try:
         # Parse request body
@@ -765,34 +780,36 @@ async def execute_tool(
         if not tool_name:
             return {"success": False, "error": "Tool name is required"}
 
-        # Map tool names to actual MCP functions
+        # Map tool names to (function, param_model)
         tool_map = {
             # Tenant tools
-            "tenant.use_master_key": stores.use_master_key,
+            "tenant.use_master_key": (stores.use_master_key, UseMasterKeyParams),
             # Store tools
-            "stores.register": stores.register_store,
-            "stores.list": stores.list_stores_mcp,
-            "stores.use_store": stores.use_store,
-            "stores.delete": stores.delete_store_mcp,
-            "stores.resolve": stores.resolve_store,
+            "stores.register": (stores.register_store, RegisterStoreParams),
+            "stores.list": (stores.list_stores_mcp, None),
+            "stores.use_store": (stores.use_store, UseStoreParams),
+            "stores.delete": (stores.delete_store_mcp, DeleteStoreParams),
+            "stores.resolve": (stores.resolve_store, ResolveStoreParams),
             # Order tools
-            "orders.get": orders.get_order_mcp,
-            "orders.list": orders.list_orders_mcp,
-            "orders.create": orders.create_order_mcp,
-            "orders.update": orders.update_order_mcp,
-            "orders.delete": orders.delete_order_mcp,
+            "orders.get": (orders.get_order_mcp, GetOrderParams),
+            "orders.list": (orders.list_orders_mcp, ListOrdersParams),
+            "orders.create": (orders.create_order_mcp, CreateOrderParams),
+            "orders.update": (orders.update_order_mcp, UpdateOrderParams),
+            "orders.delete": (orders.delete_order_mcp, DeleteOrderParams),
             # Product tools
-            "products.get": products.get_product_mcp,
-            "products.list": products.list_products_mcp,
+            "products.get": (products.get_product_mcp, GetProductParams),
+            "products.list": (products.list_products_mcp, ListProductsParams),
         }
 
-        tool_func = tool_map.get(tool_name)
-        if not tool_func:
+        tool_info = tool_map.get(tool_name)
+        if not tool_info:
             return {
                 "success": False,
                 "error": f"Unknown tool: {tool_name}",
                 "available_tools": list(tool_map.keys()),
             }
+
+        tool_func, param_model = tool_info
 
         # Execute tool
         start_time = time.perf_counter()
@@ -805,8 +822,13 @@ async def execute_tool(
                 except json_module.JSONDecodeError:
                     pass  # Keep as string if not valid JSON
 
-        # Call the tool
-        result = await tool_func(params, db)
+        # Convert params dict to Pydantic model instance
+        if param_model:
+            param_instance = param_model(**params)
+            result = await tool_func(param_instance, db)
+        else:
+            # Tool has no params (e.g., stores.list)
+            result = await tool_func(db)
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 
@@ -893,10 +915,12 @@ async def user_list_page(
 
     # Calculate statistics
     total_stores = sum(u["store_count"] for u in users)
+    # Use naive datetime for comparison (SQLite stores naive)
+    now_naive = datetime.now(UTC).replace(tzinfo=None)
     active_today = sum(
         1
         for u in users
-        if u["last_activity"] and (datetime.now(UTC) - u["last_activity"]).days == 0
+        if u["last_activity"] and (now_naive - u["last_activity"]).days == 0
     )
 
     return get_templates().TemplateResponse(
