@@ -383,8 +383,8 @@ async def handle_call_tool(
         elif tool_name == "stores_resolve":
             from mcp_server.routers.stores import ResolveStoreParams, resolve_store
 
-            params_obj = ResolveStoreParams(**tool_args)
-            result = await resolve_store(params=params_obj, db=db)
+            resolve_params = ResolveStoreParams(**tool_args)
+            result = await resolve_store(params=resolve_params, db=db)
             return {
                 "content": [
                     {
@@ -397,8 +397,8 @@ async def handle_call_tool(
         elif tool_name == "stores_delete":
             from mcp_server.routers.stores import DeleteStoreParams, delete_store_mcp
 
-            params_obj = DeleteStoreParams(**tool_args)
-            result = await delete_store_mcp(params=params_obj, db=db)
+            delete_params = DeleteStoreParams(**tool_args)
+            result = await delete_store_mcp(params=delete_params, db=db)
             return {
                 "content": [
                     {
@@ -411,22 +411,22 @@ async def handle_call_tool(
         elif tool_name == "orders_list":
             from mcp_server.routers.orders import ListOrdersParams, list_orders_mcp
 
-            params_obj = ListOrdersParams(**tool_args)
-            result = await list_orders_mcp(params=params_obj, db=db)
+            list_orders_params = ListOrdersParams(**tool_args)
+            result = await list_orders_mcp(params=list_orders_params, db=db)
             return {"content": [{"type": "text", "text": str(result)}]}
 
         elif tool_name == "orders_get":
             from mcp_server.routers.orders import GetOrderParams, get_order_mcp
 
-            params_obj = GetOrderParams(**tool_args)
-            result = await get_order_mcp(params=params_obj, db=db)
+            get_order_params = GetOrderParams(**tool_args)
+            result = await get_order_mcp(params=get_order_params, db=db)
             return {"content": [{"type": "text", "text": str(result)}]}
 
         elif tool_name == "orders_update":
             from mcp_server.routers.orders import UpdateOrderParams, update_order_mcp
 
-            params_obj = UpdateOrderParams(**tool_args)
-            result = await update_order_mcp(params=params_obj, db=db)
+            update_order_params = UpdateOrderParams(**tool_args)
+            result = await update_order_mcp(params=update_order_params, db=db)
             order_id = result.get("order", {}).get(
                 "id", tool_args.get("order_id", "unknown")
             )
@@ -442,15 +442,15 @@ async def handle_call_tool(
                 list_products_mcp,
             )
 
-            params_obj = ListProductsParams(**tool_args)
-            result = await list_products_mcp(params=params_obj, db=db)
+            list_products_params = ListProductsParams(**tool_args)
+            result = await list_products_mcp(params=list_products_params, db=db)
             return {"content": [{"type": "text", "text": str(result)}]}
 
         elif tool_name == "products_get":
             from mcp_server.routers.products import GetProductParams, get_product_mcp
 
-            params_obj = GetProductParams(**tool_args)
-            result = await get_product_mcp(params=params_obj, db=db)
+            get_product_params = GetProductParams(**tool_args)
+            result = await get_product_mcp(params=get_product_params, db=db)
             return {"content": [{"type": "text", "text": str(result)}]}
 
         else:
