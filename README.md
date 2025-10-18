@@ -316,17 +316,124 @@ This prevents data loss and duplicate entries.
 
 ## 📋 Environment Variables
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `SERVER_MODE` | Server mode: `mcp` or `api` | `mcp` | No |
-| `MCP_KMS_KEY` | Base64-encoded encryption key (32+ bytes) | - | Yes |
-| `DATABASE_URL` | SQLite database URL | `sqlite:///./data/app.db` | No |
-| `PUBLIC_URL` | Public URL for MCP client config | `http://localhost:8080` | No |
-| `LOG_LEVEL` | Logging level | `info` | No |
-| `TRUST_PROXY` | Trust proxy headers | `false` | No |
-| `AUTO_PROVISION_TENANT` | Auto-create tenants | `true` | No |
-| `ADMIN_MASTER_KEY` | Admin master key (auto-provisions) | - | No |
-| `ENABLE_PUBLIC_SIGNUP` | Allow public email signups | `false` | No |
+### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `MCP_KMS_KEY` | Base64-encoded encryption key (32+ bytes) | `dGVzdC1rbXMta2V5...` |
+
+### Core Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Server port | `8080` |
+| `DATABASE_URL` | Database connection URL | `sqlite:///data/app.db` |
+| `LOG_LEVEL` | Logging verbosity | `INFO` |
+| `TRUST_PROXY` | Trust proxy headers (X-Forwarded-For) | `false` |
+
+### Authentication & Security
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ADMIN_MASTER_KEY` | **Admin master key for WebUI login** (⚠️ change in production!) | `dev-admin-master-key-change-in-production-VNS09qKDdt` |
+| `AUTO_PROVISION_TENANT` | Auto-create tenants for unknown master keys | `true` |
+| `JWT_SECRET_KEY` | JWT signing key (required if WebUI enabled) | Auto-generated |
+| `SESSION_TIMEOUT` | Session timeout in seconds | `86400` (24h) |
+| `CSRF_SECRET_KEY` | CSRF token secret | Auto-generated |
+
+### WebUI Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ENABLE_WEBUI` | Enable web admin interface | `false` |
+| `PUBLIC_URL` | Public URL for MCP client config generation | `http://localhost:8080` |
+| `SESSION_COOKIE_SECURE` | Require HTTPS for cookies | `true` |
+| `SESSION_COOKIE_HTTPONLY` | HttpOnly flag for cookies | `true` |
+| `SESSION_COOKIE_SAMESITE` | SameSite cookie attribute | `Strict` |
+
+### Rate Limiting
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RATE_LIMIT_RPM` | API requests per minute | `120` |
+| `WEBUI_RATE_LIMIT_LOGIN` | Login attempts per IP per minute | `5` |
+| `WEBUI_RATE_LIMIT_SIGNUP` | Signup attempts per IP per minute | `2` |
+| `WEBUI_RATE_LIMIT_API_CONSOLE` | API console requests per user per minute | `30` |
+| `SIGNUP_RATE_LIMIT_PER_HOUR` | Signups per IP per hour | `3` |
+
+### Public Signup (Optional - Phase 6)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ENABLE_PUBLIC_SIGNUP` | Allow public email signups | `false` |
+| `REQUIRE_EMAIL_VERIFICATION` | Require email verification | `true` |
+| `SIGNUP_VERIFICATION_EXPIRY` | Verification link expiry (seconds) | `900` (15 min) |
+
+### Email Settings (for Public Signup)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `EMAIL_PROVIDER` | Email provider: `console`, `smtp` | `console` |
+| `SMTP_HOST` | SMTP server hostname | - |
+| `SMTP_PORT` | SMTP server port | `587` |
+| `SMTP_USERNAME` | SMTP username | - |
+| `SMTP_PASSWORD` | SMTP password | - |
+| `SMTP_USE_TLS` | Use TLS for SMTP | `true` |
+| `SMTP_FROM_EMAIL` | Default sender email | - |
+
+### Caching
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CACHE_BACKEND` | Cache backend: `memory`, `sqlite`, `redis` | `memory` |
+| `REDIS_URL` | Redis connection URL | `redis://redis:6379/0` |
+| `CACHE_TTL_ORDERS` | Cache TTL for orders (seconds) | `15` |
+| `CACHE_TTL_PRODUCTS` | Cache TTL for products (seconds) | `60` |
+| `CACHE_TTL_CUSTOMERS` | Cache TTL for customers (seconds) | `60` |
+| `CACHE_TTL_STORE_SETTINGS` | Cache TTL for store settings (seconds) | `300` |
+
+### HTTP Client
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `HTTP_TIMEOUT` | HTTP client timeout (seconds) | `30` |
+| `HTTP_MAX_RETRIES` | Max retries for HTTP 429/5xx | `3` |
+| `MUTATION_MAX_RETRIES` | Max retries for mutation conflicts | `5` |
+
+### Monitoring
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ENABLE_METRICS` | Enable Prometheus metrics endpoint | `true` |
+| `ENABLE_DETAILED_HEALTH` | Enable detailed health check | `true` |
+| `ENABLE_AUDIT_LOG` | Enable audit logging | `true` |
+| `AUDIT_LOG_RETENTION_DAYS` | Audit log retention (days) | `90` |
+
+### Testing (Optional)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ORDERDESK_TEST_ENABLED` | Enable integration tests | `false` |
+| `ORDERDESK_TEST_STORE_ID` | Test store ID | - |
+| `ORDERDESK_TEST_API_KEY` | Test API key | - |
+
+### Quick Setup
+
+Create a `.env` file with minimum required settings:
+
+```bash
+# Required
+MCP_KMS_KEY=dGVzdC1rbXMta2V5LWZvci1kZXZlbG9wbWVudC0zMi1ieXRlcy1taW5pbXVt
+
+# Admin Access (⚠️ CHANGE IN PRODUCTION!)
+ADMIN_MASTER_KEY=dev-admin-master-key-change-in-production-VNS09qKDdt
+
+# WebUI (Optional)
+ENABLE_WEBUI=true
+PUBLIC_URL=http://localhost:8080
+
+# That's it for development!
+```
 
 ## 🏭 Production Features
 

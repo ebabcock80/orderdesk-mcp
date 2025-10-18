@@ -9,31 +9,40 @@
 ### **1. Master Key** (Your Login Password)
 
 **What it is:**
-- Your personal login password for the WebUI
+- Your personal login password for the WebUI and MCP authentication
 - 64-character cryptographically secure string
 - Like: `VNS09qKDdt-_jC1tai-nIdrq3xUIfxihsCQWC5F1mGUoJmtsEjWwJprFuAztTFHD`
 
 **What it's for:**
 - ✅ Logging into the WebUI
-- ✅ Authenticating with MCP tools
+- ✅ Authenticating with MCP tools (HTTP endpoint)
 - ✅ Your personal account access
 
 **How to get one:**
-- **Option 1:** Generate it yourself:
+
+- **Option 1:** Use the admin master key from `.env`:
+  ```bash
+  # In your .env file:
+  ADMIN_MASTER_KEY=dev-admin-master-key-change-in-production-VNS09qKDdt
+  ```
+  This key auto-provisions an admin account on first startup.
+  **⚠️ IMPORTANT:** Change this in production!
+
+- **Option 2:** Generate your own:
   ```bash
   python3 -c "import secrets; print(secrets.token_urlsafe(48))"
   ```
-  Then login with it (auto-provisions account on first use)
+  Then login with it (auto-provisions account on first use if `AUTO_PROVISION_TENANT=true`)
 
-- **Option 2:** Use public signup (Phase 6):
+- **Option 3:** Use public signup (if enabled):
   - Visit http://localhost:8080/webui/signup
   - Verify your email
   - Master key shown once (save it!)
 
 **Security:**
-- Never stored in plaintext
-- Hashed with bcrypt before storage
+- Never stored in plaintext (hashed with bcrypt)
 - If you lose it, you lose access (cannot recover)
+- The `ADMIN_MASTER_KEY` in `.env` should be changed immediately in production
 
 ---
 
