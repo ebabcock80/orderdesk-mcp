@@ -31,11 +31,25 @@ class MCPError(Exception):
 class OrderDeskError(MCPError):
     """Error from OrderDesk API."""
 
-    def __init__(self, message: str, status_code: int | None = None, response: dict | None = None):
+    def __init__(
+        self,
+        message: str,
+        code: str | None = None,
+        status_code: int | None = None,
+        response: dict | None = None,
+        details: dict | None = None
+    ):
+        # Build details dict
+        error_details = details.copy() if details else {}
+        if status_code is not None:
+            error_details["status_code"] = status_code
+        if response is not None:
+            error_details["response"] = response
+        
         super().__init__(
-            code="ORDERDESK_API_ERROR",
+            code=code or "ORDERDESK_API_ERROR",
             message=message,
-            details={"status_code": status_code, "response": response}
+            details=error_details
         )
 
 

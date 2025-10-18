@@ -105,7 +105,10 @@ class OrderDeskClient:
         if not path.startswith("/"):
             path = f"/{path}"
         
-        return urljoin(self.BASE_URL, path)
+        # urljoin has quirky behavior, so we'll just concatenate
+        # Make sure BASE_URL doesn't end with / and path starts with /
+        base = self.BASE_URL.rstrip("/")
+        return f"{base}{path}"
     
     def _get_auth_params(self) -> dict[str, str]:
         """

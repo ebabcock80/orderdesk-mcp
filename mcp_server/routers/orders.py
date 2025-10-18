@@ -1,8 +1,17 @@
-"""Order management endpoints with full mutation workflow."""
+"""
+Order management endpoints and MCP tools.
 
-from typing import Any
+Implements both HTTP endpoints (for WebUI) and MCP tools (for AI agents).
+
+MCP Tools:
+- orders.get - Fetch single order by ID
+- orders.list - List orders with pagination and filtering
+"""
+
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from mcp_server.models.database import get_db
@@ -13,9 +22,12 @@ from mcp_server.models.orderdesk import (
     OrderMutation,
     UpdateAddressRequest,
 )
+from mcp_server.models.common import ValidationError, NotFoundError, OrderDeskError
 from mcp_server.services.cache import cache_manager
-from mcp_server.services.orderdesk import OrderDeskAPIError, OrderDeskClient, mutate_order_full
-from mcp_server.services.tenant import TenantService
+from mcp_server.services.orderdesk_client import OrderDeskClient
+from mcp_server.services.store import StoreService
+from mcp_server.services.session import require_auth, get_tenant_key, get_context
+from mcp_server.utils.logging import logger
 
 router = APIRouter()
 
@@ -514,3 +526,340 @@ async def add_note_to_order(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to add note: {str(e)}",
         )
+
+
+# ============================================================================
+# MCP Tools - Order Operations
+# ============================================================================
+
+class GetOrderParams(BaseModel):
+    """Parameters for orders.get tool."""
+    order_id: str = Field(..., description="OrderDesk order ID")
+    store_identifier: Optional[str] = Field(
+        None,
+        description="Store ID or name (optional if active store is set)"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "order_id": "123456",
+                "store_identifier": "production"
+            }
+        }
+
+
+class ListOrdersParams(BaseModel):
+    """Parameters for orders.list tool."""
+    store_identifier: Optional[str] = Field(
+        None,
+        description="Store ID or name (optional if active store is set)"
+    )
+    limit: int = Field(
+        50,
+        ge=1,
+        le=100,
+        description="Number of orders to return (1-100, default 50)"
+    )
+    offset: int = Field(
+        0,
+        ge=0,
+        description="Number of orders to skip (default 0)"
+    )
+    folder_id: Optional[int] = Field(
+        None,
+        description="Filter by folder ID"
+    )
+    status: Optional[str] = Field(
+        None,
+        description="Filter by status (e.g., 'open', 'completed', 'cancelled')"
+    )
+    search: Optional[str] = Field(
+        None,
+        description="Search query (searches order ID, email, name, etc.)"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "store_identifier": "production",
+                "limit": 50,
+                "offset": 0,
+                "status": "open"
+            }
+        }
+
+
+# MCP Tool Implementations
+
+async def get_order_mcp(params: GetOrderParams, db: Session = Depends(get_db)) -> dict:
+    """
+    Get a single order by ID.
+    
+    MCP Tool: orders.get
+    
+    Fetches complete order information including items, customer details,
+    shipping information, and all order metadata.
+    
+    Args:
+        order_id: OrderDesk order ID
+        store_identifier: Store ID or name (optional if active store set)
+    
+    Returns:
+        {
+            "status": "success",
+            "order": {
+                "id": "123456",
+                "source_id": "ORDER-001",
+                "email": "customer@example.com",
+                "order_total": 29.99,
+                "date_added": "2025-10-18T12:00:00Z",
+                "order_items": [...],
+                ...
+            }
+        }
+    
+    Raises:
+        NotFoundError: If order or store not found
+        AuthError: If not authenticated
+    """
+    tenant_id = require_auth()
+    tenant_key = get_tenant_key()
+    
+    try:
+        store_service = StoreService(db)
+        
+        # Resolve store (by identifier or active store)
+        if params.store_identifier:
+            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+        else:
+            # Use active store from session
+            context = get_context()
+            if not context.active_store_id:
+                raise ValidationError(
+                    "No store specified and no active store set. Use stores.use_store first or provide store_identifier.",
+                    missing_fields=["store_identifier"]
+                )
+            store = await store_service.get_store(tenant_id, context.active_store_id)
+        
+        if not store:
+            raise NotFoundError("Store", params.store_identifier or "active")
+        
+        # Get decrypted credentials
+        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        
+        # Check cache first
+        cache_key = f"orders/{params.order_id}"
+        cached = await cache_manager.get(tenant_id, store.store_id, cache_key)
+        if cached:
+            logger.info(
+                "Order fetched from cache",
+                tenant_id=tenant_id,
+                store_id=store.store_id,
+                order_id=params.order_id
+            )
+            return {
+                "status": "success",
+                "order": cached,
+                "cached": True
+            }
+        
+        # Create OrderDesk client
+        async with OrderDeskClient(store_id, api_key) as client:
+            # Fetch order
+            order = await client.get_order(params.order_id)
+            
+            # Cache the result (15 seconds TTL for orders)
+            await cache_manager.set(tenant_id, store.store_id, cache_key, order)
+            
+            logger.info(
+                "Order fetched successfully",
+                tenant_id=tenant_id,
+                store_id=store.store_id,
+                order_id=params.order_id
+            )
+            
+            return {
+                "status": "success",
+                "order": order,
+                "cached": False
+            }
+    
+    except (NotFoundError, ValidationError):
+        raise
+    except OrderDeskError as e:
+        if e.code == "NOT_FOUND":
+            raise NotFoundError("Order", params.order_id)
+        raise
+    except Exception as e:
+        logger.error("Failed to fetch order", error=str(e))
+        raise ValidationError(f"Failed to fetch order: {str(e)}")
+
+
+async def list_orders_mcp(params: ListOrdersParams, db: Session = Depends(get_db)) -> dict:
+    """
+    List orders with pagination and filtering.
+    
+    MCP Tool: orders.list
+    
+    Retrieves a paginated list of orders with optional filtering by
+    folder, status, and search query.
+    
+    Args:
+        store_identifier: Store ID or name (optional if active store set)
+        limit: Page size (1-100, default 50)
+        offset: Starting position (default 0)
+        folder_id: Filter by folder ID (optional)
+        status: Filter by status (optional)
+        search: Search query (optional)
+    
+    Returns:
+        {
+            "status": "success",
+            "orders": [
+                {
+                    "id": "123456",
+                    "source_id": "ORDER-001",
+                    "email": "customer@example.com",
+                    "order_total": 29.99,
+                    ...
+                }
+            ],
+            "pagination": {
+                "count": 50,
+                "limit": 50,
+                "offset": 0,
+                "page": 1,
+                "has_more": true
+            }
+        }
+    
+    Pagination:
+        - Use offset to get next pages: offset=0, 50, 100, ...
+        - has_more indicates if more results exist
+        - count shows results in current page
+    
+    Raises:
+        ValidationError: If parameters invalid
+        NotFoundError: If store not found
+        AuthError: If not authenticated
+    """
+    tenant_id = require_auth()
+    tenant_key = get_tenant_key()
+    
+    try:
+        store_service = StoreService(db)
+        
+        # Resolve store (by identifier or active store)
+        if params.store_identifier:
+            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+        else:
+            # Use active store from session
+            context = get_context()
+            if not context.active_store_id:
+                raise ValidationError(
+                    "No store specified and no active store set. Use stores.use_store first or provide store_identifier.",
+                    missing_fields=["store_identifier"]
+                )
+            store = await store_service.get_store(tenant_id, context.active_store_id)
+        
+        if not store:
+            raise NotFoundError("Store", params.store_identifier or "active")
+        
+        # Get decrypted credentials
+        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        
+        # Build cache parameters (for cache key generation)
+        cache_params = {
+            "limit": params.limit,
+            "offset": params.offset,
+        }
+        if params.folder_id is not None:
+            cache_params["folder_id"] = params.folder_id
+        if params.status:
+            cache_params["status"] = params.status
+        if params.search:
+            cache_params["search"] = params.search
+        
+        # Check cache first
+        cached = await cache_manager.get(tenant_id, store.store_id, "orders", cache_params)
+        if cached:
+            logger.info(
+                "Orders fetched from cache",
+                tenant_id=tenant_id,
+                store_id=store.store_id,
+                count=cached.get("count", 0)
+            )
+            return {
+                "status": "success",
+                "orders": cached.get("orders", []),
+                "pagination": cached.get("pagination", {}),
+                "cached": True
+            }
+        
+        # Create OrderDesk client
+        async with OrderDeskClient(store_id, api_key) as client:
+            # Fetch orders
+            response = await client.list_orders(
+                limit=params.limit,
+                offset=params.offset,
+                folder_id=params.folder_id,
+                status=params.status,
+                search=params.search
+            )
+            
+            # Prepare response
+            result = {
+                "orders": response["orders"],
+                "pagination": {
+                    "count": response["count"],
+                    "limit": response["limit"],
+                    "offset": response["offset"],
+                    "page": response["page"],
+                    "has_more": response["has_more"]
+                }
+            }
+            
+            # Cache the result (15 seconds TTL for orders)
+            await cache_manager.set(tenant_id, store.store_id, "orders", result, cache_params)
+            
+            logger.info(
+                "Orders listed successfully",
+                tenant_id=tenant_id,
+                store_id=store.store_id,
+                count=response["count"],
+                page=response["page"]
+            )
+            
+            return {
+                "status": "success",
+                **result,
+                "cached": False
+            }
+    
+    except (NotFoundError, ValidationError):
+        raise
+    except OrderDeskError as e:
+        logger.error("OrderDesk API error", error=str(e), code=e.code)
+        raise ValidationError(f"Failed to list orders: {e.message}")
+    except Exception as e:
+        logger.error("Failed to list orders", error=str(e))
+        raise ValidationError(f"Failed to list orders: {str(e)}")
+
+
+# ============================================================================
+# MCP Tool Registration (for MCP server)
+# ============================================================================
+
+MCP_TOOLS = {
+    "orders.get": {
+        "function": get_order_mcp,
+        "params_schema": GetOrderParams,
+        "description": "Fetch a single order by ID with complete details"
+    },
+    "orders.list": {
+        "function": list_orders_mcp,
+        "params_schema": ListOrdersParams,
+        "description": "List orders with pagination and filtering options"
+    }
+}
