@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # OrderDesk MCP Server - Staging Configuration
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: orderdesk-mcp-server:staging
+    container_name: orderdesk-mcp-staging
+    env_file: .env
+    volumes:
+      - mcp_data:/app/data:rw
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=sqlite:////app/data/app.db
+      - CACHE_BACKEND=${CACHE_BACKEND:-sqlite}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: false
+    networks:
+      - mcp-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis - Optional for staging (test production-like caching)
+  redis:
+    image: redis:7-alpine
+    container_name: orderdesk-redis-staging
+    volumes:
+      - redis_data:/data:rw
+    ports:
+      - "127.0.0.1:6379:6379"
+    restart: unless-stopped
+    command: >
+      redis-server 
+      --appendonly yes 
+      --maxmemory 256mb 
+      --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - mcp-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  mcp_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  mcp-network:
+    driver: bridge
+
+# =============================================================================
+# Staging Deployment Notes
+# =============================================================================
+#
+# Purpose:
+# - Pre-production testing
+# - QA validation
+# - Load testing
+# - Integration testing
+#
+# Setup:
+# 1. Copy staging.env to .env:
+#    cp config/environments/staging.env .env
+#
+# 2. Update all secrets in .env:
+#    - MCP_KMS_KEY
+#    - ADMIN_MASTER_KEY
+#    - JWT_SECRET_KEY
+#    - CSRF_SECRET_KEY
+#    - SMTP credentials
+#
+# 3. Deploy:
+#    docker-compose -f docker-compose.staging.yml up -d
+#
+# 4. Test:
+#    curl https://staging.yourdomain.com/health
+#
+# Key Features:
+# - Real SMTP for email testing
+# - Production-like rate limits
+# - Integration tests enabled
+# - Trace viewer for debugging
+# - SSL/TLS testing
+#
+# Differences from Production:
+# - Detailed health checks enabled
+# - Trace viewer enabled
+# - May use test OrderDesk accounts
+# - Relaxed logging for debugging
+#
+
