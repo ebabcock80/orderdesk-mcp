@@ -15,7 +15,6 @@ from mcp_server.utils.logging import logger
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Create MCP server instance
 server = Server("orderdesk-mcp")

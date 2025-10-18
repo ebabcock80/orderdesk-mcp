@@ -1,6 +1,6 @@
 """Common data models, error types, and result envelopes for MCP responses."""
 
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -45,7 +45,7 @@ class OrderDeskError(MCPError):
             error_details["status_code"] = status_code
         if response is not None:
             error_details["response"] = response
-        
+
         super().__init__(
             code=code or "ORDERDESK_API_ERROR",
             message=message,
@@ -128,10 +128,10 @@ class NotFoundError(MCPError):
 T = TypeVar('T')
 
 
-class Result(BaseModel, Generic[T]):
+class Result[T](BaseModel):
     """
     Standard result envelope for MCP responses.
-    
+
     Provides consistent response format with status, data, and error fields.
     """
     status: Literal["success", "error"]
@@ -183,8 +183,8 @@ def validation_error_response(
 ) -> dict[str, Any]:
     """
     Create a validation error response with helpful information.
-    
-    Per specification: Validation errors should list missing fields 
+
+    Per specification: Validation errors should list missing fields
     and provide a minimal valid example.
     """
     error = ValidationError(

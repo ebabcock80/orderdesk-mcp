@@ -30,7 +30,7 @@ REDACTED_FIELDS = {
 def redact_secrets(data: Any) -> Any:
     """
     Recursively redact sensitive fields from any data structure.
-    
+
     Per specification: Never log plaintext secrets.
     """
     if isinstance(data, dict):

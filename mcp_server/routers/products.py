@@ -8,18 +8,18 @@ MCP Tools:
 - products.list - List products with pagination and search
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from mcp_server.models.common import NotFoundError, OrderDeskError, ValidationError
 from mcp_server.models.database import get_db
-from mcp_server.models.common import ValidationError, NotFoundError, OrderDeskError
 from mcp_server.services.cache import cache_manager
 from mcp_server.services.orderdesk_client import OrderDeskClient
+from mcp_server.services.session import get_context, get_tenant_key, require_auth
 from mcp_server.services.store import StoreService
-from mcp_server.services.session import require_auth, get_tenant_key, get_context
 from mcp_server.utils.logging import logger
 
 router = APIRouter()
@@ -28,16 +28,26 @@ router = APIRouter()
 async def get_orderdesk_client(request: Request, store_id: str, db: Session) -> OrderDeskClient:
     """Get OrderDesk client for the specified store."""
     tenant_id = request.state.tenant_id
-    tenant_service = TenantService(db)
+    store_service = StoreService(db)
 
-    credentials = tenant_service.get_store_credentials(tenant_id, store_id)
-    if not credentials:
+    # Get tenant key from context (set during auth)
+    tenant_key = get_tenant_key()
+    if not tenant_key:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Store not found or invalid credentials",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
         )
 
-    store_id_actual, api_key = credentials
+    # Get store
+    store = await store_service.resolve_store(tenant_id, store_id)
+    if not store:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Store not found",
+        )
+
+    # Get decrypted credentials
+    store_id_actual, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
     return OrderDeskClient(store_id_actual, api_key)
 
 
@@ -81,7 +91,7 @@ async def list_inventory_items(
         return result
     except HTTPException:
         raise
-    except OrderDeskAPIError as e:
+    except OrderDeskError as e:
         raise HTTPException(
             status_code=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=e.message,
@@ -121,7 +131,7 @@ async def get_inventory_item(
         return result
     except HTTPException:
         raise
-    except OrderDeskAPIError as e:
+    except OrderDeskError as e:
         raise HTTPException(
             status_code=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=e.message,
@@ -156,7 +166,7 @@ async def create_inventory_item(
         return result
     except HTTPException:
         raise
-    except OrderDeskAPIError as e:
+    except OrderDeskError as e:
         raise HTTPException(
             status_code=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=e.message,
@@ -192,7 +202,7 @@ async def update_inventory_item(
         return result
     except HTTPException:
         raise
-    except OrderDeskAPIError as e:
+    except OrderDeskError as e:
         raise HTTPException(
             status_code=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=e.message,
@@ -227,7 +237,7 @@ async def delete_inventory_item(
         return result
     except HTTPException:
         raise
-    except OrderDeskAPIError as e:
+    except OrderDeskError as e:
         raise HTTPException(
             status_code=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=e.message,
@@ -246,11 +256,11 @@ async def delete_inventory_item(
 class GetProductParams(BaseModel):
     """Parameters for products.get tool."""
     product_id: str = Field(..., description="OrderDesk product/inventory item ID")
-    store_identifier: Optional[str] = Field(
+    store_identifier: str | None = Field(
         None,
         description="Store ID or name (optional if active store is set)"
     )
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -263,7 +273,7 @@ class GetProductParams(BaseModel):
 
 class ListProductsParams(BaseModel):
     """Parameters for products.list tool."""
-    store_identifier: Optional[str] = Field(
+    store_identifier: str | None = Field(
         None,
         description="Store ID or name (optional if active store is set)"
     )
@@ -278,11 +288,11 @@ class ListProductsParams(BaseModel):
         ge=0,
         description="Number of products to skip (default 0)"
     )
-    search: Optional[str] = Field(
+    search: str | None = Field(
         None,
         description="Search query (searches name, SKU, description, category)"
     )
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -300,16 +310,16 @@ class ListProductsParams(BaseModel):
 async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db)) -> dict:
     """
     Get a single product by ID.
-    
+
     MCP Tool: products.get
-    
+
     Fetches complete product information including price, SKU, quantity,
     weight, category, and description.
-    
+
     Args:
         product_id: OrderDesk product/inventory item ID
         store_identifier: Store ID or name (optional if active store set)
-    
+
     Returns:
         {
             "status": "success",
@@ -323,17 +333,17 @@ async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db
             },
             "cached": false
         }
-    
+
     Raises:
         NotFoundError: If product or store not found
         AuthError: If not authenticated
     """
     tenant_id = require_auth()
     tenant_key = get_tenant_key()
-    
+
     try:
         store_service = StoreService(db)
-        
+
         # Resolve store (by identifier or active store)
         if params.store_identifier:
             store = await store_service.resolve_store(tenant_id, params.store_identifier)
@@ -345,13 +355,13 @@ async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db
                     missing_fields=["store_identifier"]
                 )
             store = await store_service.get_store(tenant_id, context.active_store_id)
-        
+
         if not store:
             raise NotFoundError("Store", params.store_identifier or "active")
-        
+
         # Get decrypted credentials
         store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
-        
+
         # Check cache first (60-second TTL for products)
         cache_key = f"products/{params.product_id}"
         cached = await cache_manager.get(tenant_id, store.store_id, cache_key)
@@ -367,28 +377,28 @@ async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db
                 "product": cached,
                 "cached": True
             }
-        
+
         # Create OrderDesk client
         async with OrderDeskClient(store_id, api_key) as client:
             # Fetch product
             product = await client.get_product(params.product_id)
-            
+
             # Cache the result (60 seconds TTL for products - longer than orders)
             await cache_manager.set(tenant_id, store.store_id, cache_key, product)
-            
+
             logger.info(
                 "Product fetched successfully",
                 tenant_id=tenant_id,
                 store_id=store.store_id,
                 product_id=params.product_id
             )
-            
+
             return {
                 "status": "success",
                 "product": product,
                 "cached": False
             }
-    
+
     except (NotFoundError, ValidationError):
         raise
     except OrderDeskError as e:
@@ -403,18 +413,18 @@ async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db
 async def list_products_mcp(params: ListProductsParams, db: Session = Depends(get_db)) -> dict:
     """
     List products with pagination and search.
-    
+
     MCP Tool: products.list
-    
+
     Retrieves a paginated list of products with optional search filtering.
     Products are cached for 60 seconds (longer than orders).
-    
+
     Args:
         store_identifier: Store ID or name (optional if active store set)
         limit: Page size (1-100, default 50)
         offset: Starting position (default 0)
         search: Search query (optional)
-    
+
     Returns:
         {
             "status": "success",
@@ -437,16 +447,16 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
             },
             "cached": false
         }
-    
+
     Pagination:
         - Use offset to get next pages: offset=0, 50, 100, ...
         - has_more indicates if more results exist
         - count shows results in current page
-    
+
     Search:
         - Searches across: name, SKU, description, category
         - Case-insensitive partial match
-    
+
     Raises:
         ValidationError: If parameters invalid
         NotFoundError: If store not found
@@ -454,10 +464,10 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
     """
     tenant_id = require_auth()
     tenant_key = get_tenant_key()
-    
+
     try:
         store_service = StoreService(db)
-        
+
         # Resolve store (by identifier or active store)
         if params.store_identifier:
             store = await store_service.resolve_store(tenant_id, params.store_identifier)
@@ -469,13 +479,13 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
                     missing_fields=["store_identifier"]
                 )
             store = await store_service.get_store(tenant_id, context.active_store_id)
-        
+
         if not store:
             raise NotFoundError("Store", params.store_identifier or "active")
-        
+
         # Get decrypted credentials
         store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
-        
+
         # Build cache parameters
         cache_params = {
             "limit": params.limit,
@@ -483,7 +493,7 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
         }
         if params.search:
             cache_params["search"] = params.search
-        
+
         # Check cache first (60-second TTL for products)
         cached = await cache_manager.get(tenant_id, store.store_id, "products", cache_params)
         if cached:
@@ -499,7 +509,7 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
                 "pagination": cached.get("pagination", {}),
                 "cached": True
             }
-        
+
         # Create OrderDesk client
         async with OrderDeskClient(store_id, api_key) as client:
             # Fetch products
@@ -508,7 +518,7 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
                 offset=params.offset,
                 search=params.search
             )
-            
+
             # Prepare response
             result = {
                 "products": response["products"],
@@ -520,10 +530,10 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
                     "has_more": response["has_more"]
                 }
             }
-            
+
             # Cache the result (60 seconds TTL for products - longer than orders)
             await cache_manager.set(tenant_id, store.store_id, "products", result, cache_params)
-            
+
             logger.info(
                 "Products listed successfully",
                 tenant_id=tenant_id,
@@ -531,13 +541,13 @@ async def list_products_mcp(params: ListProductsParams, db: Session = Depends(ge
                 count=response["count"],
                 page=response["page"]
             )
-            
+
             return {
                 "status": "success",
                 **result,
                 "cached": False
             }
-    
+
     except (NotFoundError, ValidationError):
         raise
     except OrderDeskError as e:
