@@ -85,13 +85,6 @@
             <div class="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
                 <h4 class="text-sm font-semibold text-blue-900 mb-2">📝 Setup Instructions</h4>
                 <ol class="text-xs text-blue-800 space-y-1.5 list-decimal list-inside">
-                    <li><strong>Download the bridge script:</strong>
-                        <code class="block bg-blue-100 px-2 py-1 rounded mt-1 font-mono text-xs">curl -o ~/mcp-client-bridge.py {{ server_url }}/static/mcp-client-bridge.py</code>
-                        <p class="mt-1 text-xs">Or <a href="{{ server_url }}/static/mcp-client-bridge.py" download class="text-blue-700 underline font-semibold">download it here</a> and save to your home directory</p>
-                    </li>
-                    <li><strong>Make it executable:</strong>
-                        <code class="block bg-blue-100 px-2 py-1 rounded mt-1 font-mono text-xs">chmod +x ~/mcp-client-bridge.py</code>
-                    </li>
                     <li><strong>Paste your master key</strong> in the field below to generate your configuration</li>
                     <li><strong>Copy the configuration</strong> by clicking the "Copy JSON" button</li>
                     <li><strong>Open your MCP client's config file:</strong>
@@ -104,6 +97,9 @@
                     <li><strong>Restart</strong> your MCP client (e.g., Claude Desktop)</li>
                     <li>✅ <strong>Done!</strong> Your AI assistant can now manage OrderDesk orders, products, and stores!</li>
                 </ol>
+                <p class="text-xs text-blue-700 mt-2 italic">
+                    💡 No additional setup needed! The <code class="bg-blue-100 px-1 rounded">mcp-remote</code> package will be installed automatically.
+                </p>
             </div>
             
             <!-- Server URL -->
@@ -258,17 +254,20 @@ function updateMcpConfig() {
         return;
     }
     
-    // Generate config with actual master key
+    // Generate config with actual master key (using mcp-remote like Linear example)
     const config = {
         "mcpServers": {}
     };
     
+    // Build URL with auth token as query parameter
+    const mcpUrl = serverUrl + "/mcp?token=" + encodeURIComponent(masterKey);
+    
     config.mcpServers[mcpServerName] = {
-        "command": "python3",
+        "command": "npx",
         "args": [
-            "~/mcp-client-bridge.py",
-            serverUrl + "/mcp",
-            masterKey
+            "-y",
+            "mcp-remote",
+            mcpUrl
         ]
     };
     

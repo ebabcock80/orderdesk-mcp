@@ -254,30 +254,6 @@ if settings.enable_webui:
 # app.include_router(webhooks.router)
 
 
-@app.get("/static/mcp-client-bridge.py")
-async def download_bridge_script():
-    """Serve the MCP client bridge script for download."""
-    import os
-    from fastapi.responses import FileResponse
-    
-    script_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), 
-        "mcp-client-bridge.py"
-    )
-    
-    if os.path.exists(script_path):
-        return FileResponse(
-            script_path,
-            media_type="text/x-python",
-            filename="mcp-client-bridge.py"
-        )
-    else:
-        return JSONResponse(
-            {"error": "Bridge script not found"},
-            status_code=404
-        )
-
-
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint."""
