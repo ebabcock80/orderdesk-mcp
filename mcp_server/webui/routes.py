@@ -18,8 +18,16 @@ from mcp_server.webui.auth import (
 
 router = APIRouter(prefix="/webui", tags=["webui"])
 
-# Configure Jinja2 templates
-templates = Jinja2Templates(directory="mcp_server/templates")
+# Lazy-load templates to avoid import-time issues
+_templates = None
+
+
+def get_templates():
+    """Get or create Jinja2 templates instance."""
+    global _templates
+    if _templates is None:
+        _templates = Jinja2Templates(directory="mcp_server/templates")
+    return _templates
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -27,7 +35,7 @@ async def login_page(request: Request):
     """Display login page."""
     csrf_token = generate_csrf_token()
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         "login.html",
         {
             "request": request,
@@ -62,7 +70,7 @@ async def login(
     if not success or tenant_id is None:
         # Authentication failed
         new_csrf = generate_csrf_token()
-        return templates.TemplateResponse(
+        return get_templates().TemplateResponse(
             "login.html",
             {
                 "request": request,
@@ -119,7 +127,7 @@ async def dashboard(
     # Get recent activity (audit logs)
     # TODO: Implement when audit log service is ready
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         "dashboard.html",
         {
             "request": request,
@@ -154,7 +162,7 @@ async def list_stores(
     store_service = StoreService(db)
     stores = await store_service.list_stores(tenant_id)
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         "stores/list.html",
         {
             "request": request,
@@ -171,7 +179,7 @@ async def add_store_form(
     user: dict = Depends(get_current_user),
 ):
     """Display add store form."""
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         "stores/add.html",
         {
             "request": request,
@@ -234,7 +242,7 @@ async def add_store(
     except Exception as e:
         logger.error("Failed to register store via WebUI", error=str(e))
 
-        return templates.TemplateResponse(
+        return get_templates().TemplateResponse(
             "stores/add.html",
             {
                 "request": request,
@@ -311,7 +319,7 @@ async def store_details(
         # Store not found - redirect to list
         return RedirectResponse(url="/webui/stores", status_code=303)
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         "stores/details.html",
         {
             "request": request,
@@ -338,7 +346,7 @@ async def edit_store_form(
     if not store:
         return RedirectResponse(url="/webui/stores", status_code=303)
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         "stores/edit.html",
         {
             "request": request,
@@ -433,7 +441,7 @@ async def edit_store(
         logger.error("Failed to update store via WebUI", error=str(e))
         db.rollback()
 
-        return templates.TemplateResponse(
+        return get_templates().TemplateResponse(
             "stores/edit.html",
             {
                 "request": request,
@@ -699,7 +707,7 @@ async def api_console(
     # Convert to list for dropdown
     tools = list(tools_dict.values())
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         "console.html",
         {
             "request": request,
@@ -828,7 +836,7 @@ async def settings_page(
         "version": "0.1.0-alpha",
     }
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         "settings.html",
         {
             "request": request,
