@@ -45,10 +45,10 @@ async def create_store(
     """Create a new store for the authenticated tenant."""
     try:
         tenant_id = request.state.tenant_id
-        tenant_service = TenantService(db)
+        store_service = StoreService(db)
 
         # Check if store already exists for this tenant
-        existing_stores = tenant_service.list_stores(tenant_id)
+        existing_stores = await store_service.list_stores(tenant_id)
         for store in existing_stores:
             if store.store_id == store_data.store_id:
                 raise HTTPException(
@@ -56,7 +56,11 @@ async def create_store(
                     detail=f"Store {store_data.store_id} already exists for this tenant",
                 )
 
-        return tenant_service.create_store(tenant_id, store_data)
+        # TODO: Implement create_store in StoreService
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Store creation endpoint not yet implemented - use MCP tools instead",
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -74,8 +78,19 @@ async def list_stores(
     """List all stores for the authenticated tenant."""
     try:
         tenant_id = request.state.tenant_id
-        tenant_service = TenantService(db)
-        return tenant_service.list_stores(tenant_id)
+        store_service = StoreService(db)
+        stores = await store_service.list_stores(tenant_id)
+        # Convert to response format
+        return [
+            StoreResponse(
+                id=s.id,
+                store_id=s.store_id,
+                store_name=s.store_name,
+                label=s.label,
+                created_at=s.created_at,
+            )
+            for s in stores
+        ]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -92,9 +107,9 @@ async def delete_store(
     """Delete a store."""
     try:
         tenant_id = request.state.tenant_id
-        tenant_service = TenantService(db)
+        store_service = StoreService(db)
 
-        success = tenant_service.delete_store(tenant_id, store_id)
+        success = await store_service.delete_store(tenant_id, store_id)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

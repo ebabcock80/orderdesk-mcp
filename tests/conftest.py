@@ -23,7 +23,8 @@ def test_db():
     engine = create_engine(test_db_url, connect_args={"check_same_thread": False})
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    # Create tables
+    # Drop all tables (if exist) and recreate with fresh schema
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
     yield TestingSessionLocal

@@ -25,9 +25,8 @@ async def get_tenant_from_master_key(
     # Try to find existing tenant
     crypto_manager = get_crypto_manager()
     for tenant in db.query(Tenant).all():
-        if crypto_manager.verify_master_key(
-            master_key, tenant.master_key_hash, tenant.salt
-        ):
+        # Bcrypt hash includes salt, so we only need the hash for verification
+        if crypto_manager.verify_master_key(master_key, tenant.master_key_hash):
             return tenant
 
     # Auto-provision new tenant if enabled
@@ -75,6 +74,8 @@ async def authenticate_request(request: Request) -> Tenant:
 
 async def auth_middleware(request: Request, call_next):
     """Authentication middleware."""
+    from fastapi.responses import JSONResponse
+    
     # Skip auth for health and docs endpoints
     if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
         response = await call_next(request)
@@ -88,12 +89,28 @@ async def auth_middleware(request: Request, call_next):
         request.state.tenant = tenant
         request.state.tenant_id = tenant.id
 
-    except AuthError:
-        # Let auth errors bubble up
-        raise
+    except AuthError as e:
+        # Return 401 response directly (middleware can't use exception handlers)
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": e.message if hasattr(e, 'message') else str(e),
+                }
+            },
+        )
     except Exception as e:
-        # Convert other errors to auth errors
-        raise AuthError(f"Authentication error: {str(e)}")
+        # Convert other errors to 401 responses
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": {
+                    "code": "AUTHENTICATION_ERROR",
+                    "message": f"Authentication error: {str(e)}",
+                }
+            },
+        )
 
     response = await call_next(request)
     return response

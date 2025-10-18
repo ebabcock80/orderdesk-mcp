@@ -40,6 +40,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from mcp_server.auth.middleware import auth_middleware
 from mcp_server.config import settings
+from mcp_server.models.common import AuthError
 from mcp_server.models.database import create_tables
 from mcp_server.routers import health, orders, products, stores  # webhooks - Phase 5+
 from mcp_server.utils.logging import logger
@@ -191,6 +192,31 @@ app.include_router(products.router)
 async def metrics():
     """Prometheus metrics endpoint."""
     return Response(generate_latest(), media_type="text/plain")
+
+
+@app.exception_handler(AuthError)
+async def auth_error_handler(request: Request, exc: AuthError):
+    """Handle authentication errors with 401 response."""
+    request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+
+    logger.warning(
+        "authentication_failed",
+        error=str(exc),
+        request_id=request_id,
+        path=request.url.path,
+        method=request.method,
+    )
+
+    return JSONResponse(
+        status_code=401,
+        content={
+            "error": {
+                "code": "UNAUTHORIZED",
+                "message": str(exc.message) if hasattr(exc, 'message') else str(exc),
+                "request_id": request_id,
+            }
+        },
+    )
 
 
 @app.exception_handler(Exception)

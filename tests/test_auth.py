@@ -2,29 +2,31 @@
 
 from fastapi import status
 
-from mcp_server.auth.crypto import crypto_manager
+from mcp_server.auth.crypto import get_crypto_manager
 
 
 def test_crypto_manager_key_derivation():
     """Test key derivation and encryption/decryption."""
+    crypto_manager = get_crypto_manager()
     master_key = "test-master-key"
     salt = crypto_manager.generate_salt()
 
-    # Derive tenant key
-    tenant_key = crypto_manager.derive_tenant_key(master_key, salt.encode("utf-8"))
+    # Derive tenant key (salt is already a string)
+    tenant_key = crypto_manager.derive_tenant_key(master_key, salt)
     assert len(tenant_key) == 32
 
     # Test encryption/decryption
     api_key = "test-api-key-12345"
-    encrypted = crypto_manager.encrypt_api_key(api_key, tenant_key)
-    decrypted = crypto_manager.decrypt_api_key(encrypted, tenant_key)
+    ciphertext, tag, nonce = crypto_manager.encrypt_api_key(api_key, tenant_key)
+    decrypted = crypto_manager.decrypt_api_key(ciphertext, tag, nonce, tenant_key)
 
     assert decrypted == api_key
-    assert encrypted != api_key
+    assert ciphertext != api_key
 
 
 def test_master_key_hashing():
     """Test master key hashing and verification."""
+    crypto_manager = get_crypto_manager()
     master_key = "test-master-key"
 
     # Hash master key
@@ -32,9 +34,9 @@ def test_master_key_hashing():
     assert hashed != master_key
     assert len(salt) > 0
 
-    # Verify master key
-    assert crypto_manager.verify_master_key(master_key, hashed, salt)
-    assert not crypto_manager.verify_master_key("wrong-key", hashed, salt)
+    # Verify master key (bcrypt hash includes salt, so we only need hash)
+    assert crypto_manager.verify_master_key(master_key, hashed)
+    assert not crypto_manager.verify_master_key("wrong-key", hashed)
 
 
 def test_auth_middleware(client, master_key):

@@ -67,7 +67,10 @@ class Tenant(Base):
     salt = Column(String(255), nullable=False)  # Random salt for HKDF
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     updated_at = Column(
-        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+        DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=True,
     )
 
     __table_args__ = (Index("idx_tenants_master_key_hash", "master_key_hash"),)
