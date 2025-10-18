@@ -510,62 +510,194 @@ async def api_console(
     Returns:
         API console HTML page
     """
-    # List of all available MCP tools
-    tools = [
-        {
+    import json
+
+    # Comprehensive tool definitions
+    tools_dict = {
+        "tenant.use_master_key": {
             "name": "tenant.use_master_key",
             "description": "Authenticate with master key",
-            "params": [{"name": "master_key", "type": "string", "required": True}],
-        },
-        {
-            "name": "stores.register",
-            "description": "Register new store",
             "params": [
-                {"name": "store_name", "type": "string", "required": True},
-                {"name": "store_id", "type": "string", "required": True},
-                {"name": "api_key", "type": "string", "required": True},
-                {"name": "label", "type": "string", "required": False},
+                {
+                    "name": "master_key",
+                    "type": "password",
+                    "required": True,
+                    "placeholder": "Your master key",
+                }
             ],
         },
-        {
+        "stores.register": {
+            "name": "stores.register",
+            "description": "Register new OrderDesk store",
+            "params": [
+                {
+                    "name": "store_name",
+                    "type": "string",
+                    "required": True,
+                    "placeholder": "My Store",
+                },
+                {
+                    "name": "store_id",
+                    "type": "string",
+                    "required": True,
+                    "placeholder": "12345",
+                },
+                {
+                    "name": "api_key",
+                    "type": "password",
+                    "required": True,
+                    "placeholder": "Your API key",
+                },
+                {
+                    "name": "label",
+                    "type": "string",
+                    "required": False,
+                    "placeholder": "Production",
+                },
+            ],
+        },
+        "stores.list": {
             "name": "stores.list",
             "description": "List all registered stores",
             "params": [],
         },
-        {
+        "stores.use_store": {
             "name": "stores.use_store",
-            "description": "Set active store",
-            "params": [{"name": "store_name", "type": "string", "required": True}],
+            "description": "Set active store for session",
+            "params": [
+                {
+                    "name": "store_name",
+                    "type": "string",
+                    "required": True,
+                    "placeholder": "My Store",
+                }
+            ],
         },
-        {
+        "stores.resolve": {
+            "name": "stores.resolve",
+            "description": "Resolve store by name (debug)",
+            "params": [
+                {
+                    "name": "store_name",
+                    "type": "string",
+                    "required": True,
+                    "placeholder": "My Store",
+                }
+            ],
+        },
+        "orders.get": {
             "name": "orders.get",
-            "description": "Get order by ID",
-            "params": [{"name": "order_id", "type": "string", "required": True}],
+            "description": "Get order by ID (cached 15s)",
+            "params": [
+                {
+                    "name": "order_id",
+                    "type": "string",
+                    "required": True,
+                    "placeholder": "123456",
+                }
+            ],
         },
-        {
+        "orders.list": {
             "name": "orders.list",
-            "description": "List orders with pagination",
+            "description": "List orders with pagination (cached 15s)",
             "params": [
-                {"name": "limit", "type": "integer", "required": False},
-                {"name": "offset", "type": "integer", "required": False},
-                {"name": "search", "type": "string", "required": False},
+                {
+                    "name": "limit",
+                    "type": "integer",
+                    "required": False,
+                    "placeholder": "50",
+                },
+                {
+                    "name": "offset",
+                    "type": "integer",
+                    "required": False,
+                    "placeholder": "0",
+                },
+                {
+                    "name": "search",
+                    "type": "string",
+                    "required": False,
+                    "placeholder": "customer@example.com",
+                },
             ],
         },
-        {
+        "orders.create": {
+            "name": "orders.create",
+            "description": "Create new order",
+            "params": [
+                {
+                    "name": "order_data",
+                    "type": "string",
+                    "required": True,
+                    "placeholder": '{"email": "customer@example.com", "order_items": [...]}',
+                }
+            ],
+        },
+        "orders.update": {
+            "name": "orders.update",
+            "description": "Update order (safe merge with retries)",
+            "params": [
+                {"name": "order_id", "type": "string", "required": True, "placeholder": "123456"},
+                {
+                    "name": "changes",
+                    "type": "string",
+                    "required": True,
+                    "placeholder": '{"email": "newemail@example.com"}',
+                },
+            ],
+        },
+        "orders.delete": {
+            "name": "orders.delete",
+            "description": "Delete order",
+            "params": [
+                {
+                    "name": "order_id",
+                    "type": "string",
+                    "required": True,
+                    "placeholder": "123456",
+                }
+            ],
+        },
+        "products.get": {
             "name": "products.get",
-            "description": "Get product by ID",
-            "params": [{"name": "product_id", "type": "string", "required": True}],
-        },
-        {
-            "name": "products.list",
-            "description": "List products with search",
+            "description": "Get product by ID (cached 60s)",
             "params": [
-                {"name": "limit", "type": "integer", "required": False},
-                {"name": "offset", "type": "integer", "required": False},
-                {"name": "search", "type": "string", "required": False},
+                {
+                    "name": "product_id",
+                    "type": "string",
+                    "required": True,
+                    "placeholder": "product-123",
+                }
             ],
         },
-    ]
+        "products.list": {
+            "name": "products.list",
+            "description": "List products with search (cached 60s)",
+            "params": [
+                {
+                    "name": "limit",
+                    "type": "integer",
+                    "required": False,
+                    "placeholder": "50",
+                },
+                {
+                    "name": "offset",
+                    "type": "integer",
+                    "required": False,
+                    "placeholder": "0",
+                },
+                {
+                    "name": "search",
+                    "type": "string",
+                    "required": False,
+                    "placeholder": "widget",
+                },
+            ],
+        },
+    }
+
+    # Convert to list for dropdown
+    tools = list(tools_dict.values())
 
     return templates.TemplateResponse(
         "console.html",
@@ -573,9 +705,103 @@ async def api_console(
             "request": request,
             "user": user,
             "tools": tools,
+            "tools_json": json.dumps(tools_dict),
             "csrf_token": generate_csrf_token(),
         },
     )
+
+
+@router.post("/console/execute")
+async def execute_tool(
+    request: Request,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Execute an MCP tool via the web console.
+
+    Args:
+        request: FastAPI request with JSON body
+        user: Current authenticated user
+        db: Database session
+
+    Returns:
+        JSON response with tool result
+    """
+    import json as json_module
+    import time
+
+    from mcp_server.routers import orders, products, stores
+
+    try:
+        # Parse request body
+        body = await request.json()
+        tool_name = body.get("tool_name")
+        params = body.get("params", {})
+
+        if not tool_name:
+            return {"success": False, "error": "Tool name is required"}
+
+        # Map tool names to actual MCP functions
+        tool_map = {
+            # Tenant tools
+            "tenant.use_master_key": stores.use_master_key,
+            # Store tools
+            "stores.register": stores.register_store,
+            "stores.list": stores.list_stores_mcp,
+            "stores.use_store": stores.use_store,
+            "stores.delete": stores.delete_store_mcp,
+            "stores.resolve": stores.resolve_store,
+            # Order tools
+            "orders.get": orders.get_order_mcp,
+            "orders.list": orders.list_orders_mcp,
+            "orders.create": orders.create_order_mcp,
+            "orders.update": orders.update_order_mcp,
+            "orders.delete": orders.delete_order_mcp,
+            # Product tools
+            "products.get": products.get_product_mcp,
+            "products.list": products.list_products_mcp,
+        }
+
+        tool_func = tool_map.get(tool_name)
+        if not tool_func:
+            return {
+                "success": False,
+                "error": f"Unknown tool: {tool_name}",
+                "available_tools": list(tool_map.keys()),
+            }
+
+        # Execute tool
+        start_time = time.perf_counter()
+
+        # Parse JSON strings in params if needed (for order_data, changes, etc.)
+        for key, value in params.items():
+            if isinstance(value, str) and value.startswith("{"):
+                try:
+                    params[key] = json_module.loads(value)
+                except json_module.JSONDecodeError:
+                    pass  # Keep as string if not valid JSON
+
+        # Call the tool
+        result = await tool_func(params, db)
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+
+        return {
+            "success": True,
+            "tool": tool_name,
+            "result": result,
+            "duration_ms": round(duration_ms, 2),
+            "timestamp": time.time(),
+        }
+
+    except Exception as e:
+        logger.error("Tool execution error in WebUI console", error=str(e))
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }
 
 
 @router.get("/settings", response_class=HTMLResponse)

@@ -4,46 +4,272 @@
 {% block page_title %}API Test Console{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-    <div class="bg-white shadow sm:rounded-lg">
-        <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-base font-semibold leading-6 text-gray-900">Test MCP Tools</h3>
-            <div class="mt-2 max-w-xl text-sm text-gray-500">
-                <p>Select a tool below and provide the required parameters to test it.</p>
-            </div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Left side: Tool selector and form -->
+    <div class="space-y-6">
+        <!-- Tool selector -->
+        <div class="bg-white shadow sm:rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-base font-semibold leading-6 text-gray-900 mb-4">Select MCP Tool</h3>
+                
+                <select id="tool-selector" 
+                        class="block w-full rounded-md border-0 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                        onchange="updateToolForm(this.value)">
+                    <option value="">-- Select a tool --</option>
+                    {% for tool in tools %}
+                    <option value="{{ tool.name }}">{{ tool.name }}</option>
+                    {% endfor %}
+                </select>
 
-            <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {% for tool in tools %}
-                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <h4 class="font-mono text-sm font-semibold text-indigo-600">{{ tool.name }}</h4>
-                    <p class="mt-1 text-sm text-gray-600">{{ tool.description }}</p>
-                    <div class="mt-2">
-                        {% if tool.params %}
-                        <p class="text-xs text-gray-500">Parameters: {{ tool.params|length }}</p>
-                        {% else %}
-                        <p class="text-xs text-gray-500">No parameters required</p>
-                        {% endif %}
+                <div id="tool-description" class="mt-4 text-sm text-gray-600 hidden">
+                    <!-- Tool description will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Tool execution form -->
+        <div id="tool-form-container" class="bg-white shadow sm:rounded-lg hidden">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-base font-semibold leading-6 text-gray-900 mb-4">Parameters</h3>
+                
+                <form id="tool-form" onsubmit="executeTool(event)">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" id="tool_name" name="tool_name" value="">
+                    
+                    <div id="tool-params" class="space-y-4">
+                        <!-- Parameters will be dynamically inserted here -->
+                    </div>
+
+                    <div class="mt-6 flex items-center justify-end gap-x-3">
+                        <button type="button" onclick="resetForm()" class="text-sm font-semibold text-gray-900">
+                            Reset
+                        </button>
+                        <button type="submit" 
+                                class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                            Execute Tool
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right side: Response and history -->
+    <div class="space-y-6">
+        <!-- Response display -->
+        <div id="response-container" class="bg-white shadow sm:rounded-lg hidden">
+            <div class="px-4 py-5 sm:p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-semibold leading-6 text-gray-900">Response</h3>
+                    <div class="flex gap-2">
+                        <span id="response-status" class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium">
+                            <!-- Status badge -->
+                        </span>
+                        <span id="response-duration" class="text-xs text-gray-500">
+                            <!-- Duration -->
+                        </span>
                     </div>
                 </div>
-                {% endfor %}
-            </div>
+                
+                <div id="response-content" class="rounded-md bg-gray-900 p-4 overflow-x-auto">
+                    <pre class="text-sm text-gray-100"><code id="response-json"></code></pre>
+                </div>
 
-            <div class="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-400">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-                        </svg>
-                    </div>
-                    <div class="ml-3">
-                        <p class="text-sm text-yellow-700">
-                            <strong>Coming Soon:</strong> Interactive API console is under development. For now, use the MCP protocol directly or the HTTP API endpoints.
-                        </p>
-                    </div>
+                <div class="mt-4 flex gap-2">
+                    <button onclick="copyResponse()" class="text-sm text-indigo-600 hover:text-indigo-500">
+                        Copy Response
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Request history -->
+        <div id="history-container" class="bg-white shadow sm:rounded-lg hidden">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-base font-semibold leading-6 text-gray-900 mb-4">Request History</h3>
+                
+                <div id="history-list" class="space-y-2">
+                    <!-- History items will be inserted here -->
                 </div>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
 
+<!-- Tool definitions (embedded as JSON) -->
+<script>
+const tools = {{ tools_json|safe }};
+
+function updateToolForm(toolName) {
+    if (!toolName) {
+        document.getElementById('tool-form-container').classList.add('hidden');
+        document.getElementById('tool-description').classList.add('hidden');
+        return;
+    }
+
+    const tool = tools[toolName];
+    if (!tool) return;
+
+    // Show description
+    const descDiv = document.getElementById('tool-description');
+    descDiv.innerHTML = '<p class="text-sm text-gray-700">' + tool.description + '</p>';
+    descDiv.classList.remove('hidden');
+
+    // Set tool name
+    document.getElementById('tool_name').value = toolName;
+
+    // Generate form fields
+    const paramsDiv = document.getElementById('tool-params');
+    paramsDiv.innerHTML = '';
+
+    if (tool.params && tool.params.length > 0) {
+        tool.params.forEach(param => {
+            const fieldDiv = document.createElement('div');
+            
+            const label = document.createElement('label');
+            label.className = 'block text-sm font-medium leading-6 text-gray-900';
+            label.htmlFor = param.name;
+            label.innerHTML = param.name + (param.required ? ' <span class="text-red-500">*</span>' : '');
+            
+            const input = document.createElement('input');
+            input.type = param.type === 'integer' ? 'number' : 'text';
+            input.name = param.name;
+            input.id = param.name;
+            input.required = param.required;
+            input.className = 'mt-2 block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6';
+            
+            if (param.type === 'password') {
+                input.type = 'password';
+            }
+            
+            if (param.placeholder) {
+                input.placeholder = param.placeholder;
+            }
+            
+            fieldDiv.appendChild(label);
+            fieldDiv.appendChild(input);
+            paramsDiv.appendChild(fieldDiv);
+        });
+    } else {
+        paramsDiv.innerHTML = '<p class="text-sm text-gray-500 italic">No parameters required</p>';
+    }
+
+    // Show form
+    document.getElementById('tool-form-container').classList.remove('hidden');
+}
+
+async function executeTool(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const formData = new FormData(form);
+    const toolName = formData.get('tool_name');
+    
+    // Build parameters object
+    const params = {};
+    for (let [key, value] of formData.entries()) {
+        if (key !== 'csrf_token' && key !== 'tool_name' && value) {
+            // Convert to number if integer type
+            const tool = tools[toolName];
+            const paramDef = tool.params.find(p => p.name === key);
+            if (paramDef && paramDef.type === 'integer') {
+                params[key] = parseInt(value);
+            } else {
+                params[key] = value;
+            }
+        }
+    }
+    
+    // Show loading
+    const responseContainer = document.getElementById('response-container');
+    responseContainer.classList.remove('hidden');
+    document.getElementById('response-json').textContent = 'Executing...';
+    
+    const startTime = Date.now();
+    
+    try {
+        // Execute tool
+        const response = await fetch('/webui/console/execute', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                tool_name: toolName,
+                params: params,
+                csrf_token: formData.get('csrf_token')
+            })
+        });
+        
+        const duration = Date.now() - startTime;
+        const result = await response.json();
+        
+        // Display response
+        document.getElementById('response-json').textContent = JSON.stringify(result, null, 2);
+        
+        // Update status badge
+        const statusBadge = document.getElementById('response-status');
+        if (response.ok) {
+            statusBadge.className = 'inline-flex items-center gap-x-1.5 rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-700';
+            statusBadge.innerHTML = '<svg class="h-1.5 w-1.5 fill-green-500" viewBox="0 0 6 6"><circle cx="3" cy="3" r="3" /></svg> Success';
+        } else {
+            statusBadge.className = 'inline-flex items-center gap-x-1.5 rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700';
+            statusBadge.innerHTML = '<svg class="h-1.5 w-1.5 fill-red-500" viewBox="0 0 6 6"><circle cx="3" cy="3" r="3" /></svg> Error';
+        }
+        
+        // Update duration
+        document.getElementById('response-duration').textContent = duration + 'ms';
+        
+        // Add to history
+        addToHistory(toolName, params, result, response.ok, duration);
+        
+    } catch (error) {
+        document.getElementById('response-json').textContent = 'Error: ' + error.message;
+        const statusBadge = document.getElementById('response-status');
+        statusBadge.className = 'inline-flex items-center rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700';
+        statusBadge.textContent = 'Error';
+    }
+}
+
+function addToHistory(toolName, params, response, success, duration) {
+    const historyContainer = document.getElementById('history-container');
+    const historyList = document.getElementById('history-list');
+    
+    historyContainer.classList.remove('hidden');
+    
+    const item = document.createElement('div');
+    item.className = 'border-l-4 ' + (success ? 'border-green-500' : 'border-red-500') + ' bg-gray-50 p-3 rounded';
+    
+    const timestamp = new Date().toLocaleTimeString();
+    
+    item.innerHTML = `
+        <div class="flex items-center justify-between">
+            <p class="text-sm font-medium text-gray-900">${toolName}</p>
+            <span class="text-xs text-gray-500">${timestamp} (${duration}ms)</span>
+        </div>
+        <p class="text-xs text-gray-600 mt-1">${Object.keys(params).length} parameters</p>
+    `;
+    
+    // Add to top of history
+    historyList.insertBefore(item, historyList.firstChild);
+    
+    // Keep only last 10 items
+    while (historyList.children.length > 10) {
+        historyList.removeChild(historyList.lastChild);
+    }
+}
+
+function copyResponse() {
+    const json = document.getElementById('response-json').textContent;
+    navigator.clipboard.writeText(json);
+    alert('Response copied to clipboard!');
+}
+
+function resetForm() {
+    document.getElementById('tool-form').reset();
+    document.getElementById('tool-selector').value = '';
+    document.getElementById('tool-form-container').classList.add('hidden');
+    document.getElementById('tool-description').classList.add('hidden');
+}
+</script>
+{% endblock %}
