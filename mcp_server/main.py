@@ -35,7 +35,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from mcp_server.auth.middleware import auth_middleware
 from mcp_server.config import settings
 from mcp_server.models.database import create_tables
-from mcp_server.routers import health, stores  # orders, products, webhooks - Phase 2+
+from mcp_server.routers import health, stores, orders, products  # webhooks - Phase 5+
 from mcp_server.utils.logging import logger
 from mcp_server.utils.proxy import get_cloudflare_ray, get_real_client_ip, should_add_hsts
 
@@ -169,9 +169,9 @@ app.middleware("http")(auth_middleware)
 # Include routers
 app.include_router(health.router)
 app.include_router(stores.router)
-# Phase 2+ routers (not yet implemented):
-# app.include_router(orders.router)
-# app.include_router(products.router)
+app.include_router(orders.router)
+app.include_router(products.router)
+# Phase 5+ routers (not yet implemented):
 # app.include_router(webhooks.router)
 
 

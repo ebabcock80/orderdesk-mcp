@@ -793,4 +793,137 @@ class OrderDeskClient:
         import asyncio
         logger.info("Backing off before conflict retry", delay_seconds=delay)
         await asyncio.sleep(delay)
+    
+    # ========================================================================
+    # Product Operations
+    # ========================================================================
+    
+    async def get_product(self, product_id: str) -> dict[str, Any]:
+        """
+        Get a single product by ID.
+        
+        Args:
+            product_id: OrderDesk product/inventory item ID
+        
+        Returns:
+            Product object with all fields
+        
+        Raises:
+            OrderDeskError: If product not found or API error
+        
+        Example response:
+        {
+            "id": "product-123",
+            "name": "Premium Widget",
+            "price": 49.99,
+            "sku": "WIDGET-001",
+            "quantity": 100,
+            "weight": 1.5,
+            "category": "Electronics",
+            "description": "High-quality widget"
+        }
+        """
+        return await self.get(f"/inventory/{product_id}")
+    
+    async def list_products(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        search: Optional[str] = None
+    ) -> dict[str, Any]:
+        """
+        List products with pagination and search.
+        
+        Args:
+            limit: Number of products to return (1-100, default 50)
+            offset: Number of products to skip (default 0)
+            search: Search query (searches name, SKU, description, etc.)
+        
+        Returns:
+            Response with products array and pagination metadata
+        
+        Response format:
+        {
+            "products": [
+                {
+                    "id": "product-123",
+                    "name": "Premium Widget",
+                    "price": 49.99,
+                    "sku": "WIDGET-001",
+                    ...
+                }
+            ],
+            "count": 50,
+            "limit": 50,
+            "offset": 0,
+            "page": 1,
+            "has_more": true
+        }
+        
+        Pagination:
+        - limit: Controls page size (1-100)
+        - offset: Controls starting position
+        - has_more: Calculated based on returned count vs limit
+        
+        Search:
+        - Searches across: name, SKU, description, category
+        - Case-insensitive
+        - Partial match supported
+        """
+        # Validate pagination parameters
+        if limit < 1 or limit > 100:
+            raise OrderDeskError(
+                code="INVALID_PARAMETER",
+                message=f"Limit must be between 1 and 100, got {limit}",
+                details={"limit": limit}
+            )
+        
+        if offset < 0:
+            raise OrderDeskError(
+                code="INVALID_PARAMETER",
+                message=f"Offset must be >= 0, got {offset}",
+                details={"offset": offset}
+            )
+        
+        # Build query parameters
+        params: dict[str, Any] = {
+            "limit": limit,
+            "offset": offset
+        }
+        
+        if search:
+            params["search"] = search
+        
+        # Make request
+        response = await self.get("/inventory", params=params)
+        
+        # OrderDesk returns products in the root or in a "products" key
+        # Handle both formats
+        if isinstance(response, list):
+            products = response
+        elif isinstance(response, dict) and "products" in response:
+            products = response["products"]
+        elif isinstance(response, dict) and "inventory" in response:
+            # OrderDesk might use "inventory" key
+            products = response["inventory"]
+        else:
+            logger.warning(
+                "Unexpected OrderDesk response format for products",
+                response_type=type(response).__name__
+            )
+            products = []
+        
+        # Calculate pagination metadata
+        products_count = len(products)
+        has_more = products_count == limit  # If we got a full page, there might be more
+        current_page = (offset // limit) + 1
+        
+        return {
+            "products": products,
+            "count": products_count,
+            "limit": limit,
+            "offset": offset,
+            "page": current_page,
+            "has_more": has_more
+        }
 

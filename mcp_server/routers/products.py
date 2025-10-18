@@ -1,14 +1,26 @@
-"""Product/inventory management endpoints."""
+"""
+Product/inventory management endpoints and MCP tools.
 
-from typing import Any
+Implements both HTTP endpoints (for WebUI) and MCP tools (for AI agents).
+
+MCP Tools:
+- products.get - Fetch single product by ID
+- products.list - List products with pagination and search
+"""
+
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from mcp_server.models.database import get_db
+from mcp_server.models.common import ValidationError, NotFoundError, OrderDeskError
 from mcp_server.services.cache import cache_manager
-from mcp_server.services.orderdesk import OrderDeskAPIError, OrderDeskClient
-from mcp_server.services.tenant import TenantService
+from mcp_server.services.orderdesk_client import OrderDeskClient
+from mcp_server.services.store import StoreService
+from mcp_server.services.session import require_auth, get_tenant_key, get_context
+from mcp_server.utils.logging import logger
 
 router = APIRouter()
 
@@ -225,3 +237,330 @@ async def delete_inventory_item(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete inventory item: {str(e)}",
         )
+
+
+# ============================================================================
+# MCP Tools - Product Operations
+# ============================================================================
+
+class GetProductParams(BaseModel):
+    """Parameters for products.get tool."""
+    product_id: str = Field(..., description="OrderDesk product/inventory item ID")
+    store_identifier: Optional[str] = Field(
+        None,
+        description="Store ID or name (optional if active store is set)"
+    )
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "product_id": "product-123",
+                "store_identifier": "production"
+            }
+        }
+    }
+
+
+class ListProductsParams(BaseModel):
+    """Parameters for products.list tool."""
+    store_identifier: Optional[str] = Field(
+        None,
+        description="Store ID or name (optional if active store is set)"
+    )
+    limit: int = Field(
+        50,
+        ge=1,
+        le=100,
+        description="Number of products to return (1-100, default 50)"
+    )
+    offset: int = Field(
+        0,
+        ge=0,
+        description="Number of products to skip (default 0)"
+    )
+    search: Optional[str] = Field(
+        None,
+        description="Search query (searches name, SKU, description, category)"
+    )
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "store_identifier": "production",
+                "limit": 50,
+                "offset": 0,
+                "search": "widget"
+            }
+        }
+    }
+
+
+# MCP Tool Implementations
+
+async def get_product_mcp(params: GetProductParams, db: Session = Depends(get_db)) -> dict:
+    """
+    Get a single product by ID.
+    
+    MCP Tool: products.get
+    
+    Fetches complete product information including price, SKU, quantity,
+    weight, category, and description.
+    
+    Args:
+        product_id: OrderDesk product/inventory item ID
+        store_identifier: Store ID or name (optional if active store set)
+    
+    Returns:
+        {
+            "status": "success",
+            "product": {
+                "id": "product-123",
+                "name": "Premium Widget",
+                "price": 49.99,
+                "sku": "WIDGET-001",
+                "quantity": 100,
+                ...
+            },
+            "cached": false
+        }
+    
+    Raises:
+        NotFoundError: If product or store not found
+        AuthError: If not authenticated
+    """
+    tenant_id = require_auth()
+    tenant_key = get_tenant_key()
+    
+    try:
+        store_service = StoreService(db)
+        
+        # Resolve store (by identifier or active store)
+        if params.store_identifier:
+            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+        else:
+            context = get_context()
+            if not context.active_store_id:
+                raise ValidationError(
+                    "No store specified and no active store set. Use stores.use_store first or provide store_identifier.",
+                    missing_fields=["store_identifier"]
+                )
+            store = await store_service.get_store(tenant_id, context.active_store_id)
+        
+        if not store:
+            raise NotFoundError("Store", params.store_identifier or "active")
+        
+        # Get decrypted credentials
+        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        
+        # Check cache first (60-second TTL for products)
+        cache_key = f"products/{params.product_id}"
+        cached = await cache_manager.get(tenant_id, store.store_id, cache_key)
+        if cached:
+            logger.info(
+                "Product fetched from cache",
+                tenant_id=tenant_id,
+                store_id=store.store_id,
+                product_id=params.product_id
+            )
+            return {
+                "status": "success",
+                "product": cached,
+                "cached": True
+            }
+        
+        # Create OrderDesk client
+        async with OrderDeskClient(store_id, api_key) as client:
+            # Fetch product
+            product = await client.get_product(params.product_id)
+            
+            # Cache the result (60 seconds TTL for products - longer than orders)
+            await cache_manager.set(tenant_id, store.store_id, cache_key, product)
+            
+            logger.info(
+                "Product fetched successfully",
+                tenant_id=tenant_id,
+                store_id=store.store_id,
+                product_id=params.product_id
+            )
+            
+            return {
+                "status": "success",
+                "product": product,
+                "cached": False
+            }
+    
+    except (NotFoundError, ValidationError):
+        raise
+    except OrderDeskError as e:
+        if e.code == "NOT_FOUND":
+            raise NotFoundError("Product", params.product_id)
+        raise
+    except Exception as e:
+        logger.error("Failed to fetch product", error=str(e))
+        raise ValidationError(f"Failed to fetch product: {str(e)}")
+
+
+async def list_products_mcp(params: ListProductsParams, db: Session = Depends(get_db)) -> dict:
+    """
+    List products with pagination and search.
+    
+    MCP Tool: products.list
+    
+    Retrieves a paginated list of products with optional search filtering.
+    Products are cached for 60 seconds (longer than orders).
+    
+    Args:
+        store_identifier: Store ID or name (optional if active store set)
+        limit: Page size (1-100, default 50)
+        offset: Starting position (default 0)
+        search: Search query (optional)
+    
+    Returns:
+        {
+            "status": "success",
+            "products": [
+                {
+                    "id": "product-123",
+                    "name": "Premium Widget",
+                    "price": 49.99,
+                    "sku": "WIDGET-001",
+                    "quantity": 100,
+                    ...
+                }
+            ],
+            "pagination": {
+                "count": 50,
+                "limit": 50,
+                "offset": 0,
+                "page": 1,
+                "has_more": true
+            },
+            "cached": false
+        }
+    
+    Pagination:
+        - Use offset to get next pages: offset=0, 50, 100, ...
+        - has_more indicates if more results exist
+        - count shows results in current page
+    
+    Search:
+        - Searches across: name, SKU, description, category
+        - Case-insensitive partial match
+    
+    Raises:
+        ValidationError: If parameters invalid
+        NotFoundError: If store not found
+        AuthError: If not authenticated
+    """
+    tenant_id = require_auth()
+    tenant_key = get_tenant_key()
+    
+    try:
+        store_service = StoreService(db)
+        
+        # Resolve store (by identifier or active store)
+        if params.store_identifier:
+            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+        else:
+            context = get_context()
+            if not context.active_store_id:
+                raise ValidationError(
+                    "No store specified and no active store set. Use stores.use_store first or provide store_identifier.",
+                    missing_fields=["store_identifier"]
+                )
+            store = await store_service.get_store(tenant_id, context.active_store_id)
+        
+        if not store:
+            raise NotFoundError("Store", params.store_identifier or "active")
+        
+        # Get decrypted credentials
+        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        
+        # Build cache parameters
+        cache_params = {
+            "limit": params.limit,
+            "offset": params.offset,
+        }
+        if params.search:
+            cache_params["search"] = params.search
+        
+        # Check cache first (60-second TTL for products)
+        cached = await cache_manager.get(tenant_id, store.store_id, "products", cache_params)
+        if cached:
+            logger.info(
+                "Products fetched from cache",
+                tenant_id=tenant_id,
+                store_id=store.store_id,
+                count=cached.get("count", 0)
+            )
+            return {
+                "status": "success",
+                "products": cached.get("products", []),
+                "pagination": cached.get("pagination", {}),
+                "cached": True
+            }
+        
+        # Create OrderDesk client
+        async with OrderDeskClient(store_id, api_key) as client:
+            # Fetch products
+            response = await client.list_products(
+                limit=params.limit,
+                offset=params.offset,
+                search=params.search
+            )
+            
+            # Prepare response
+            result = {
+                "products": response["products"],
+                "pagination": {
+                    "count": response["count"],
+                    "limit": response["limit"],
+                    "offset": response["offset"],
+                    "page": response["page"],
+                    "has_more": response["has_more"]
+                }
+            }
+            
+            # Cache the result (60 seconds TTL for products - longer than orders)
+            await cache_manager.set(tenant_id, store.store_id, "products", result, cache_params)
+            
+            logger.info(
+                "Products listed successfully",
+                tenant_id=tenant_id,
+                store_id=store.store_id,
+                count=response["count"],
+                page=response["page"]
+            )
+            
+            return {
+                "status": "success",
+                **result,
+                "cached": False
+            }
+    
+    except (NotFoundError, ValidationError):
+        raise
+    except OrderDeskError as e:
+        logger.error("OrderDesk API error", error=str(e), code=e.code)
+        raise ValidationError(f"Failed to list products: {e.message}")
+    except Exception as e:
+        logger.error("Failed to list products", error=str(e))
+        raise ValidationError(f"Failed to list products: {str(e)}")
+
+
+# ============================================================================
+# MCP Tool Registration (for MCP server)
+# ============================================================================
+
+MCP_TOOLS = {
+    "products.get": {
+        "function": get_product_mcp,
+        "params_schema": GetProductParams,
+        "description": "Fetch a single product by ID with complete details (cached 60s)"
+    },
+    "products.list": {
+        "function": list_products_mcp,
+        "params_schema": ListProductsParams,
+        "description": "List products with pagination and search (cached 60s)"
+    }
+}
