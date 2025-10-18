@@ -851,6 +851,320 @@ async def list_orders_mcp(params: ListOrdersParams, db: Session = Depends(get_db
 # MCP Tool Registration (for MCP server)
 # ============================================================================
 
+class CreateOrderParams(BaseModel):
+    """Parameters for orders.create tool."""
+    order_data: dict[str, Any] = Field(..., description="Order data including email and items")
+    store_identifier: Optional[str] = Field(
+        None,
+        description="Store ID or name (optional if active store is set)"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "order_data": {
+                    "email": "customer@example.com",
+                    "order_items": [
+                        {
+                            "name": "Product A",
+                            "quantity": 2,
+                            "price": 14.99
+                        }
+                    ],
+                    "shipping_method": "USPS First Class"
+                },
+                "store_identifier": "production"
+            }
+        }
+
+
+class UpdateOrderParams(BaseModel):
+    """Parameters for orders.update tool."""
+    order_id: str = Field(..., description="OrderDesk order ID")
+    changes: dict[str, Any] = Field(..., description="Partial changes to apply")
+    store_identifier: Optional[str] = Field(
+        None,
+        description="Store ID or name (optional if active store is set)"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "order_id": "123456",
+                "changes": {
+                    "email": "newemail@example.com",
+                    "customer_notes": "Please ship ASAP"
+                },
+                "store_identifier": "production"
+            }
+        }
+
+
+class DeleteOrderParams(BaseModel):
+    """Parameters for orders.delete tool."""
+    order_id: str = Field(..., description="OrderDesk order ID")
+    store_identifier: Optional[str] = Field(
+        None,
+        description="Store ID or name (optional if active store is set)"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "order_id": "123456",
+                "store_identifier": "production"
+            }
+        }
+
+
+# Additional MCP Tool Implementations
+
+async def create_order_mcp(params: CreateOrderParams, db: Session = Depends(get_db)) -> dict:
+    """
+    Create a new order.
+    
+    MCP Tool: orders.create
+    
+    Creates a new order in OrderDesk with the provided data.
+    
+    Args:
+        order_data: Order data (email and items required)
+        store_identifier: Store ID or name (optional if active store set)
+    
+    Returns:
+        {
+            "status": "success",
+            "order": {
+                "id": "123456",
+                "source_id": "ORDER-001",
+                ...
+            }
+        }
+    
+    Raises:
+        ValidationError: If required fields missing
+        NotFoundError: If store not found
+    """
+    tenant_id = require_auth()
+    tenant_key = get_tenant_key()
+    
+    try:
+        store_service = StoreService(db)
+        
+        # Resolve store
+        if params.store_identifier:
+            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+        else:
+            context = get_context()
+            if not context.active_store_id:
+                raise ValidationError(
+                    "No store specified and no active store set.",
+                    missing_fields=["store_identifier"]
+                )
+            store = await store_service.get_store(tenant_id, context.active_store_id)
+        
+        if not store:
+            raise NotFoundError("Store", params.store_identifier or "active")
+        
+        # Get decrypted credentials
+        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        
+        # Create OrderDesk client
+        async with OrderDeskClient(store_id, api_key) as client:
+            # Create order
+            order = await client.create_order(params.order_data)
+            
+            # Invalidate cache (new order affects list queries)
+            await cache_manager.invalidate_pattern(f"{tenant_id}:{store.store_id}:orders")
+            
+            logger.info(
+                "Order created successfully",
+                tenant_id=tenant_id,
+                store_id=store.store_id,
+                order_id=order.get("id")
+            )
+            
+            return {
+                "status": "success",
+                "order": order
+            }
+    
+    except (NotFoundError, ValidationError):
+        raise
+    except OrderDeskError as e:
+        logger.error("Failed to create order", error=str(e), code=e.code)
+        raise ValidationError(f"Failed to create order: {e.message}")
+    except Exception as e:
+        logger.error("Failed to create order", error=str(e))
+        raise ValidationError(f"Failed to create order: {str(e)}")
+
+
+async def update_order_mcp(params: UpdateOrderParams, db: Session = Depends(get_db)) -> dict:
+    """
+    Update an order with safe merge workflow.
+    
+    MCP Tool: orders.update
+    
+    Uses the full-object update workflow to prevent data loss:
+    1. Fetch current order state
+    2. Merge your changes
+    3. Upload complete object
+    4. Retry on conflicts (up to 5 times)
+    
+    Args:
+        order_id: OrderDesk order ID
+        changes: Partial changes to apply
+        store_identifier: Store ID or name (optional if active store set)
+    
+    Returns:
+        {
+            "status": "success",
+            "order": {
+                "id": "123456",
+                ...
+            },
+            "retries": 0
+        }
+    
+    Raises:
+        ConflictError: If conflicts persist after 5 retries
+        NotFoundError: If order or store not found
+    """
+    tenant_id = require_auth()
+    tenant_key = get_tenant_key()
+    
+    try:
+        store_service = StoreService(db)
+        
+        # Resolve store
+        if params.store_identifier:
+            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+        else:
+            context = get_context()
+            if not context.active_store_id:
+                raise ValidationError(
+                    "No store specified and no active store set.",
+                    missing_fields=["store_identifier"]
+                )
+            store = await store_service.get_store(tenant_id, context.active_store_id)
+        
+        if not store:
+            raise NotFoundError("Store", params.store_identifier or "active")
+        
+        # Get decrypted credentials
+        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        
+        # Create OrderDesk client
+        async with OrderDeskClient(store_id, api_key) as client:
+            # Update with automatic conflict resolution
+            order = await client.update_order_with_retry(params.order_id, params.changes)
+            
+            # Invalidate cache for this order and list queries
+            await cache_manager.delete(f"{tenant_id}:{store.store_id}:orders/{params.order_id}")
+            await cache_manager.invalidate_pattern(f"{tenant_id}:{store.store_id}:orders")
+            
+            logger.info(
+                "Order updated successfully",
+                tenant_id=tenant_id,
+                store_id=store.store_id,
+                order_id=params.order_id
+            )
+            
+            return {
+                "status": "success",
+                "order": order
+            }
+    
+    except (NotFoundError, ValidationError):
+        raise
+    except OrderDeskError as e:
+        if e.code == "NOT_FOUND":
+            raise NotFoundError("Order", params.order_id)
+        logger.error("Failed to update order", error=str(e), code=e.code)
+        raise ValidationError(f"Failed to update order: {e.message}")
+    except Exception as e:
+        logger.error("Failed to update order", error=str(e))
+        raise ValidationError(f"Failed to update order: {str(e)}")
+
+
+async def delete_order_mcp(params: DeleteOrderParams, db: Session = Depends(get_db)) -> dict:
+    """
+    Delete an order.
+    
+    MCP Tool: orders.delete
+    
+    Permanently deletes an order from OrderDesk.
+    
+    Args:
+        order_id: OrderDesk order ID
+        store_identifier: Store ID or name (optional if active store set)
+    
+    Returns:
+        {
+            "status": "success",
+            "message": "Order 123456 deleted successfully"
+        }
+    
+    Raises:
+        NotFoundError: If order or store not found
+    """
+    tenant_id = require_auth()
+    tenant_key = get_tenant_key()
+    
+    try:
+        store_service = StoreService(db)
+        
+        # Resolve store
+        if params.store_identifier:
+            store = await store_service.resolve_store(tenant_id, params.store_identifier)
+        else:
+            context = get_context()
+            if not context.active_store_id:
+                raise ValidationError(
+                    "No store specified and no active store set.",
+                    missing_fields=["store_identifier"]
+                )
+            store = await store_service.get_store(tenant_id, context.active_store_id)
+        
+        if not store:
+            raise NotFoundError("Store", params.store_identifier or "active")
+        
+        # Get decrypted credentials
+        store_id, api_key = await store_service.get_decrypted_credentials(store, tenant_key)
+        
+        # Create OrderDesk client
+        async with OrderDeskClient(store_id, api_key) as client:
+            # Delete order
+            await client.delete_order(params.order_id)
+            
+            # Invalidate cache for this order and list queries
+            await cache_manager.delete(f"{tenant_id}:{store.store_id}:orders/{params.order_id}")
+            await cache_manager.invalidate_pattern(f"{tenant_id}:{store.store_id}:orders")
+            
+            logger.info(
+                "Order deleted successfully",
+                tenant_id=tenant_id,
+                store_id=store.store_id,
+                order_id=params.order_id
+            )
+            
+            return {
+                "status": "success",
+                "message": f"Order {params.order_id} deleted successfully"
+            }
+    
+    except (NotFoundError, ValidationError):
+        raise
+    except OrderDeskError as e:
+        if e.code == "NOT_FOUND":
+            raise NotFoundError("Order", params.order_id)
+        logger.error("Failed to delete order", error=str(e), code=e.code)
+        raise ValidationError(f"Failed to delete order: {e.message}")
+    except Exception as e:
+        logger.error("Failed to delete order", error=str(e))
+        raise ValidationError(f"Failed to delete order: {str(e)}")
+
+
 MCP_TOOLS = {
     "orders.get": {
         "function": get_order_mcp,
@@ -861,5 +1175,20 @@ MCP_TOOLS = {
         "function": list_orders_mcp,
         "params_schema": ListOrdersParams,
         "description": "List orders with pagination and filtering options"
+    },
+    "orders.create": {
+        "function": create_order_mcp,
+        "params_schema": CreateOrderParams,
+        "description": "Create a new order in OrderDesk"
+    },
+    "orders.update": {
+        "function": update_order_mcp,
+        "params_schema": UpdateOrderParams,
+        "description": "Update an order with safe merge workflow (fetch → merge → upload)"
+    },
+    "orders.delete": {
+        "function": delete_order_mcp,
+        "params_schema": DeleteOrderParams,
+        "description": "Delete an order from OrderDesk"
     }
 }

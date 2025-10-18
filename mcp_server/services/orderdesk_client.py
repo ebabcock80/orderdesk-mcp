@@ -571,4 +571,226 @@ class OrderDeskClient:
             "page": current_page,
             "has_more": has_more
         }
+    
+    async def create_order(self, order_data: dict[str, Any]) -> dict[str, Any]:
+        """
+        Create a new order.
+        
+        Args:
+            order_data: Order data including email, items, shipping, etc.
+        
+        Returns:
+            Created order object
+        
+        Raises:
+            OrderDeskError: If validation fails or API error
+        
+        Required fields (minimum):
+        {
+            "email": "customer@example.com",
+            "order_items": [
+                {
+                    "name": "Product Name",
+                    "quantity": 1,
+                    "price": 29.99
+                }
+            ]
+        }
+        """
+        return await self.post("/orders", json=order_data)
+    
+    async def update_order(self, order_id: str, order_data: dict[str, Any]) -> dict[str, Any]:
+        """
+        Update an order with full-object upload.
+        
+        Per specification: Always use full-object updates, never PATCH.
+        
+        Args:
+            order_id: OrderDesk order ID
+            order_data: Complete order object (not partial)
+        
+        Returns:
+            Updated order object
+        
+        Raises:
+            OrderDeskError: If update fails or conflict (409)
+        
+        Conflict Handling:
+        - 409 response indicates order changed since fetch
+        - Caller should retry with fresh fetch
+        """
+        return await self.put(f"/orders/{order_id}", json=order_data)
+    
+    async def delete_order(self, order_id: str) -> dict[str, Any]:
+        """
+        Delete an order.
+        
+        Args:
+            order_id: OrderDesk order ID
+        
+        Returns:
+            Deletion confirmation
+        
+        Raises:
+            OrderDeskError: If order not found or API error
+        """
+        return await self.delete(f"/orders/{order_id}")
+    
+    # ========================================================================
+    # Mutation Helpers
+    # ========================================================================
+    
+    async def fetch_full_order(self, order_id: str) -> dict[str, Any]:
+        """
+        Fetch complete order object for mutation.
+        
+        This is step 1 of the full-object update workflow.
+        
+        Args:
+            order_id: OrderDesk order ID
+        
+        Returns:
+            Complete order object with all fields
+        
+        Raises:
+            OrderDeskError: If order not found
+        """
+        return await self.get_order(order_id)
+    
+    def merge_order_changes(
+        self,
+        original: dict[str, Any],
+        changes: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Safely merge partial changes into full order object.
+        
+        This is step 2 of the full-object update workflow.
+        
+        Merge Rules:
+        - Top-level fields: Shallow merge (changes override original)
+        - Arrays (order_items): Full replacement if provided
+        - Nested objects (shipping_address): Shallow merge
+        - Null values: Remove field (explicit deletion)
+        - Omitted fields: Keep original value
+        
+        Args:
+            original: Complete order object from fetch
+            changes: Partial changes to apply
+        
+        Returns:
+            Merged order object ready for upload
+        
+        Example:
+        original = {
+            "email": "old@example.com",
+            "order_total": 100.00,
+            "order_items": [...]
+        }
+        changes = {
+            "email": "new@example.com"
+        }
+        result = {
+            "email": "new@example.com",  # Updated
+            "order_total": 100.00,       # Preserved
+            "order_items": [...]         # Preserved
+        }
+        """
+        merged = original.copy()
+        
+        for key, value in changes.items():
+            if value is None:
+                # Explicit null = remove field
+                merged.pop(key, None)
+            else:
+                # Override with new value
+                merged[key] = value
+        
+        return merged
+    
+    async def update_order_with_retry(
+        self,
+        order_id: str,
+        changes: dict[str, Any],
+        max_retries: int = 5
+    ) -> dict[str, Any]:
+        """
+        Update order with automatic conflict resolution.
+        
+        Implements the complete full-object update workflow with retries.
+        
+        Workflow:
+        1. Fetch current order state
+        2. Merge changes into full object
+        3. Upload full object
+        4. If conflict (409): Re-fetch and retry
+        5. Repeat up to max_retries times
+        
+        Args:
+            order_id: OrderDesk order ID
+            changes: Partial changes to apply
+            max_retries: Maximum retry attempts (default 5 per spec Q13)
+        
+        Returns:
+            Updated order object
+        
+        Raises:
+            ConflictError: If conflicts persist after max retries
+            OrderDeskError: If update fails for other reasons
+        """
+        from mcp_server.models.common import ConflictError
+        
+        for attempt in range(max_retries):
+            try:
+                # Step 1: Fetch current state
+                current_order = await self.fetch_full_order(order_id)
+                
+                # Step 2: Merge changes
+                merged_order = self.merge_order_changes(current_order, changes)
+                
+                # Step 3: Upload full object
+                updated_order = await self.update_order(order_id, merged_order)
+                
+                logger.info(
+                    "Order updated successfully",
+                    order_id=order_id,
+                    attempt=attempt + 1
+                )
+                
+                return updated_order
+            
+            except OrderDeskError as e:
+                if e.code == "CONFLICT_ERROR" and attempt < max_retries - 1:
+                    # Conflict detected - retry
+                    logger.warning(
+                        "Order update conflict, retrying",
+                        order_id=order_id,
+                        attempt=attempt + 1,
+                        max_retries=max_retries
+                    )
+                    
+                    # Exponential backoff: 0.5s, 1s, 2s, 4s, 8s
+                    backoff_delay = 0.5 * (2 ** attempt)
+                    await self._backoff_fixed(backoff_delay)
+                    continue
+                
+                # Other error or max retries - re-raise
+                raise
+        
+        # Max retries exceeded
+        raise ConflictError(
+            f"Failed to update order {order_id} after {max_retries} attempts due to conflicts",
+            retries=max_retries
+        )
+    
+    async def _backoff_fixed(self, delay: float):
+        """
+        Fixed backoff (without jitter) for conflict retries.
+        
+        Args:
+            delay: Delay in seconds
+        """
+        import asyncio
+        logger.info("Backing off before conflict retry", delay_seconds=delay)
+        await asyncio.sleep(delay)
 
