@@ -1,0 +1,223 @@
+# ============================================================================
+# Production Docker Compose Configuration
+# ============================================================================
+#
+# Includes:
+# - OrderDesk MCP Server (scalable)
+# - nginx reverse proxy with load balancing
+# - PostgreSQL database with persistence
+# - Redis cache with persistence
+# - Prometheus metrics (optional)
+# - Grafana dashboards (optional)
+#
+# Usage:
+#   docker-compose -f docker-compose.production.yml up -d
+#   docker-compose -f docker-compose.production.yml up -d --scale mcp=3
+#
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # OrderDesk MCP Server (Application)
+  # ===========================================================================
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://orderdesk:${DATABASE_PASSWORD:-changeme}@postgres:5432/orderdesk_production
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      - CACHE_BACKEND=redis
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # ===========================================================================
+  # nginx Reverse Proxy & Load Balancer
+  # ===========================================================================
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - mcp
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+  # ===========================================================================
+  # PostgreSQL Database
+  # ===========================================================================
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: orderdesk_production
+      POSTGRES_USER: orderdesk
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orderdesk"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ===========================================================================
+  # Redis Cache
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme} --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # ===========================================================================
+  # Prometheus Metrics (Optional - Use profile: monitoring)
+  # ===========================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: ["monitoring"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+  # ===========================================================================
+  # Grafana Dashboards (Optional - Use profile: monitoring)
+  # ===========================================================================
+  grafana:
+    image: grafana/grafana:latest
+    profiles: ["monitoring"]
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/orderdesk.json:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+# ============================================================================
+# Volumes (Persistent Data)
+# ============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  mcp-network:
+    driver: bridge
+
+# ============================================================================
+# Production Usage Examples
+# ============================================================================
+#
+# Start all services:
+#   docker-compose -f docker-compose.production.yml up -d
+#
+# Start with monitoring:
+#   docker-compose -f docker-compose.production.yml --profile monitoring up -d
+#
+# Scale MCP instances:
+#   docker-compose -f docker-compose.production.yml up -d --scale mcp=3
+#
+# View logs:
+#   docker-compose -f docker-compose.production.yml logs -f mcp
+#
+# Health check:
+#   curl http://localhost/health/ready
+#
+# Metrics:
+#   curl http://localhost/metrics
+#
+# Stop all services:
+#   docker-compose -f docker-compose.production.yml down
+#
+# Stop and remove volumes (DANGEROUS - deletes all data):
+#   docker-compose -f docker-compose.production.yml down -v
+#
+# ============================================================================
