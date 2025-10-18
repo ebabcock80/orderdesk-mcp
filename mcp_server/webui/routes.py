@@ -1063,17 +1063,12 @@ async def settings_page(
         "public_url": settings.public_url,
     }
     
-    # Get user's email if available
-    from mcp_server.models.database import Tenant
-    tenant = db.query(Tenant).filter(Tenant.id == user["tenant_id"]).first()
-    user_email = tenant.email if tenant and tenant.email else "your-account"
-    
     # MCP configuration template for Claude Desktop/ChatGPT
     # Use PUBLIC_URL from settings, not request URL (for Docker/reverse proxy scenarios)
     server_url = settings.public_url
     
-    # Generate unique MCP server name based on user email
-    mcp_server_name = f"orderdesk-{user_email.split('@')[0]}" if '@' in user_email else "orderdesk"
+    # Fixed MCP server name
+    mcp_server_name = "OrderDesk"
     
     mcp_config = {
         "mcpServers": {
