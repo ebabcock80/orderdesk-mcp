@@ -86,6 +86,8 @@ class OrderDeskClient:
                 headers={
                     "User-Agent": "OrderDesk-MCP-Server/0.1.0",
                     "Accept": "application/json",
+                    "ORDERDESK-STORE-ID": self.store_id,
+                    "ORDERDESK-API-KEY": self.api_key,
                 },
                 follow_redirects=True,
             )
@@ -114,19 +116,6 @@ class OrderDeskClient:
         # Make sure BASE_URL doesn't end with / and path starts with /
         base = self.BASE_URL.rstrip("/")
         return f"{base}{path}"
-
-    def _get_auth_params(self) -> dict[str, str]:
-        """
-        Get authentication parameters.
-
-        OrderDesk uses query parameters for authentication:
-        - store_id: Store ID
-        - api_key: API key
-
-        Returns:
-            Dict of auth parameters
-        """
-        return {"store_id": self.store_id, "api_key": self.api_key}
 
     async def _request_with_retry(
         self,
@@ -166,10 +155,9 @@ class OrderDeskClient:
         # Build full URL
         url = self._build_url(path)
 
-        # Merge auth params with query params
-        all_params = {**self._get_auth_params()}
-        if params:
-            all_params.update(params)
+        # Note: Auth is now in headers (ORDERDESK-STORE-ID, ORDERDESK-API-KEY)
+        # No need to merge auth params into query string
+        all_params = params or {}
 
         # Track request start time for metrics
         start_time = time.perf_counter()

@@ -155,13 +155,18 @@ class StoreService:
 
     async def get_store_by_name(self, tenant_id: str, store_name: str) -> Store | None:
         """
-        Get store by friendly name.
+        Get store by friendly name (case-insensitive).
 
         Per specification: Enable lookup by store_name to reduce parameter repetition.
         """
+        from sqlalchemy import func
+        
         return (
             self.db.query(Store)
-            .filter(Store.tenant_id == tenant_id, Store.store_name == store_name)
+            .filter(
+                Store.tenant_id == tenant_id, 
+                func.lower(Store.store_name) == func.lower(store_name)
+            )
             .first()
         )
 
