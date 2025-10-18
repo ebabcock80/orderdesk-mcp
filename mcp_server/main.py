@@ -50,16 +50,88 @@ from mcp_server.utils.proxy import (
     should_add_hsts,
 )
 
-# Prometheus metrics
+# Prometheus metrics - Enhanced for production monitoring
 REQUEST_COUNT = Counter(
     "http_requests_total",
     "Total HTTP requests",
     ["method", "endpoint", "status_code"],
 )
+
 REQUEST_DURATION = Histogram(
     "http_request_duration_seconds",
     "HTTP request duration in seconds",
     ["method", "endpoint"],
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0),
+)
+
+# MCP tool-specific metrics
+MCP_TOOL_CALLS = Counter(
+    "mcp_tool_calls_total",
+    "Total MCP tool invocations",
+    ["tool_name", "status"],
+)
+
+MCP_TOOL_DURATION = Histogram(
+    "mcp_tool_duration_seconds",
+    "MCP tool execution duration",
+    ["tool_name"],
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+)
+
+# Cache performance metrics
+CACHE_OPERATIONS = Counter(
+    "cache_operations_total",
+    "Cache operations (hit/miss/set/invalidate)",
+    ["operation", "resource_type"],
+)
+
+CACHE_HIT_RATE = Histogram(
+    "cache_hit_rate",
+    "Cache hit rate percentage",
+    ["resource_type"],
+    buckets=(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+)
+
+# Error tracking metrics
+ERROR_COUNT = Counter(
+    "errors_total",
+    "Total errors by type",
+    ["error_type", "error_code"],
+)
+
+# Database metrics
+DB_QUERY_DURATION = Histogram(
+    "db_query_duration_seconds",
+    "Database query duration",
+    ["operation"],
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),
+)
+
+DB_CONNECTIONS = Counter(
+    "db_connections_total",
+    "Database connections",
+    ["operation"],
+)
+
+# Rate limiting metrics
+RATE_LIMIT_HITS = Counter(
+    "rate_limit_hits_total",
+    "Rate limit enforcements",
+    ["tenant_id", "limit_type"],
+)
+
+# OrderDesk API metrics
+ORDERDESK_API_CALLS = Counter(
+    "orderdesk_api_calls_total",
+    "Calls to OrderDesk API",
+    ["endpoint", "method", "status_code"],
+)
+
+ORDERDESK_API_DURATION = Histogram(
+    "orderdesk_api_duration_seconds",
+    "OrderDesk API call duration",
+    ["endpoint"],
+    buckets=(0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0),
 )
 
 

@@ -1,4 +1,4 @@
-"""Multi-backend caching system."""
+"""Multi-backend caching system with Prometheus metrics."""
 
 import asyncio
 import hashlib
@@ -15,6 +15,7 @@ except ImportError:
 import structlog
 
 from mcp_server.config import settings
+from mcp_server.utils.metrics import CACHE_ITEMS, CACHE_OPERATIONS
 
 logger = structlog.get_logger(__name__)
 
@@ -260,7 +261,22 @@ class CacheManager:
         """Get value from cache."""
         query_hash = self._hash_query(params)
         key = self._generate_key(tenant_id, store_id, endpoint, query_hash)
-        return await self.backend.get(key)
+
+        # Determine resource type from endpoint
+        resource_type = endpoint.split("/")[0] if "/" in endpoint else endpoint
+
+        value = await self.backend.get(key)
+
+        if value is not None:
+            # Cache hit
+            CACHE_OPERATIONS.labels(operation="hit", resource_type=resource_type).inc()
+            logger.debug("cache_hit", endpoint=endpoint, tenant_id=tenant_id)
+        else:
+            # Cache miss
+            CACHE_OPERATIONS.labels(operation="miss", resource_type=resource_type).inc()
+            logger.debug("cache_miss", endpoint=endpoint, tenant_id=tenant_id)
+
+        return value
 
     async def set(
         self,
@@ -274,20 +290,36 @@ class CacheManager:
         query_hash = self._hash_query(params)
         key = self._generate_key(tenant_id, store_id, endpoint, query_hash)
 
+        # Determine resource type from endpoint
+        resource_type = endpoint.split("/")[0] if "/" in endpoint else endpoint
+
         # Determine TTL based on endpoint
-        ttl = self.ttls.get(endpoint.split("/")[0], 300)  # Default 5 minutes
+        ttl = self.ttls.get(resource_type, 300)  # Default 5 minutes
 
         await self.backend.set(key, value, ttl)
+
+        # Record cache set operation
+        CACHE_OPERATIONS.labels(operation="set", resource_type=resource_type).inc()
+        CACHE_ITEMS.labels(resource_type=resource_type).inc()
+        logger.debug("cache_set", endpoint=endpoint, tenant_id=tenant_id, ttl=ttl)
 
     async def invalidate_store(self, tenant_id: str, store_id: str) -> None:
         """Invalidate all cache entries for a store."""
         pattern = f"{tenant_id}:{store_id}:"
         await self.backend.invalidate_pattern(pattern)
 
+        # Record cache invalidation (use "all" as resource type for bulk invalidation)
+        CACHE_OPERATIONS.labels(operation="invalidate", resource_type="all").inc()
+        logger.info("cache_invalidate_store", tenant_id=tenant_id, store_id=store_id)
+
     async def invalidate_tenant(self, tenant_id: str) -> None:
         """Invalidate all cache entries for a tenant."""
         pattern = f"{tenant_id}:"
         await self.backend.invalidate_pattern(pattern)
+
+        # Record cache invalidation (use "all" as resource type for bulk invalidation)
+        CACHE_OPERATIONS.labels(operation="invalidate", resource_type="all").inc()
+        logger.info("cache_invalidate_tenant", tenant_id=tenant_id)
 
 
 # Global cache manager instance

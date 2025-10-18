@@ -1,21 +1,28 @@
 """
-OrderDesk HTTP Client with retry logic and error handling.
+OrderDesk HTTP Client with retry logic, error handling, and Prometheus metrics.
 
 Per specification:
 - httpx async client with configurable timeouts
 - Exponential backoff for 429/5xx errors
 - Comprehensive error handling
 - Structured logging with correlation IDs
+- Prometheus metrics for observability
 """
 
 import asyncio
 import random
+import time
 from typing import Any
 
 import httpx
 
 from mcp_server.models.common import OrderDeskError
 from mcp_server.utils.logging import logger
+from mcp_server.utils.metrics import (
+    ORDERDESK_API_CALLS,
+    ORDERDESK_API_DURATION,
+    ORDERDESK_API_RETRIES,
+)
 
 
 class OrderDeskClient:
@@ -164,6 +171,13 @@ class OrderDeskClient:
         if params:
             all_params.update(params)
 
+        # Track request start time for metrics
+        start_time = time.perf_counter()
+
+        # Record retry if this is not the first attempt
+        if attempt > 0:
+            ORDERDESK_API_RETRIES.labels(reason="retry").inc()
+
         try:
             logger.info(
                 "OrderDesk API request",
@@ -179,6 +193,15 @@ class OrderDeskClient:
                 method=method, url=url, params=all_params, json=json
             )
 
+            # Record metrics
+            duration = time.perf_counter() - start_time
+            ORDERDESK_API_CALLS.labels(
+                endpoint=path,
+                method=method,
+                status_code=str(response.status_code)
+            ).inc()
+            ORDERDESK_API_DURATION.labels(endpoint=path, method=method).observe(duration)
+
             # Check for errors
             if response.status_code >= 400:
                 await self._handle_error_response(response, method, path, attempt)
@@ -192,6 +215,7 @@ class OrderDeskClient:
                 path=path,
                 status_code=response.status_code,
                 attempt=attempt + 1,
+                duration_seconds=f"{duration:.3f}",
             )
 
             return data
