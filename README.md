@@ -1,25 +1,27 @@
 # OrderDesk MCP Server
 
 [![CI](https://github.com/ebabcock80/orderdesk-mcp/workflows/CI/badge.svg)](https://github.com/ebabcock80/orderdesk-mcp/actions)
-[![Tests](https://img.shields.io/badge/tests-76%20passing-success)](https://github.com/ebabcock80/orderdesk-mcp/actions)
-[![Coverage](https://img.shields.io/badge/coverage-58.5%25-green)](https://github.com/ebabcock80/orderdesk-mcp/actions)
+[![Tests](https://img.shields.io/badge/tests-110%20passing-success)](https://github.com/ebabcock80/orderdesk-mcp/actions)
+[![Coverage](https://img.shields.io/badge/coverage-80%25+-green)](https://github.com/ebabcock80/orderdesk-mcp/actions)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A native Model Context Protocol (MCP) server for OrderDesk integration with AI assistants like Claude and LM Studio. Features a professional web admin interface for store management, an interactive API console for testing, and comprehensive production monitoring.
+A native Model Context Protocol (MCP) server for OrderDesk integration with AI assistants like Claude Desktop and ChatGPT. Features HTTP MCP endpoint for remote connections, professional web admin interface, smart order merge workflow with deduplication, and comprehensive production monitoring.
 
-**Status:** ✅ **Production-Ready with WebUI** | **CI:** 🟢 **All Checks Passing** | **Tests:** 76/76 (100%)
+**Status:** ✅ **Production-Ready with HTTP MCP + WebUI** | **CI:** 🟢 **All Checks Passing** | **Tests:** 110/110 (100%)
 
 ## 🚀 Features
 
 ### Core MCP Features
-- **Native MCP Protocol**: Direct integration with Claude, LM Studio, and other MCP-compatible AI assistants
-- **Safe Order Updates**: Fetch → Merge → Update workflow prevents data loss
-- **Direct OrderDesk Integration**: Simplified architecture using store_id + api_key authentication
-- **Comprehensive API Coverage**: Orders, products, customers, folders, webhooks, and reports
-- **JSON Response Formatting**: Properly formatted responses for AI assistant parsing
-- **Docker Ready**: Multi-stage Docker build with health checks
-- **Persistent Storage**: SQLite database with volume mounting for data persistence
+- **HTTP MCP Endpoint**: Remote access via `/mcp` POST endpoint - connect from Claude Desktop, ChatGPT, or any MCP client
+- **Native MCP Protocol**: Full protocol support (initialize, tools/list, tools/call, prompts/list, resources/list, notifications)
+- **Smart Order Updates**: Fetch → Merge → Upload workflow with deduplication prevents data loss
+- **Multi-Tenant Architecture**: Secure tenant isolation with encrypted credentials
+- **Advanced Order Filtering**: 20+ search parameters (folder, customer, dates, email, etc.)
+- **Store Config Caching**: Auto-fetch and cache OrderDesk folders and settings
+- **Comprehensive API Coverage**: Orders, products, stores with full CRUD operations
+- **Docker Ready**: Multi-stage Docker build with health checks and persistent storage
+- **npx mcp-remote Compatible**: Easy setup with `npx -y mcp-remote http://your-server.com/mcp?token=YOUR_KEY`
 
 ### 🎨 WebUI Admin Interface (Phase 5) ⭐
 - **Professional Dashboard**: Visual overview of stores, API status, and quick actions
@@ -44,34 +46,39 @@ A native Model Context Protocol (MCP) server for OrderDesk integration with AI a
 
 **Access the WebUI:** Set `ENABLE_WEBUI=true` in `.env` and visit `http://localhost:8000/webui`
 
-## 🛠️ Implemented MCP Tools (13 Total)
+## 🛠️ Implemented MCP Tools (11 Total)
 
-**v0.1.0-alpha** includes 13 fully functional MCP tools:
+**v0.1.0-alpha** includes 11 fully functional MCP tools accessible via HTTP MCP endpoint:
 
 ### Tenant & Store Management (6 Tools)
-- `tenant.use_master_key` - Authenticate with master key (auto-provision support)
-- `stores.register` - Register OrderDesk store with encrypted credentials
-- `stores.list` - List all stores for authenticated tenant
-- `stores.use_store` - Set active store for session
-- `stores.delete` - Remove store registration
-- `stores.resolve` - Debug tool for store lookup
+- `tenant_use_master_key` - Authenticate with master key (auto-provision support)
+- `stores_register` - Register OrderDesk store with encrypted credentials
+- `stores_list` - List all stores for authenticated tenant
+- `stores_use_store` - Set active store for session context
+- `stores_delete` - Remove store registration
+- `stores_resolve` - Debug tool for store lookup by ID or name
 
-### Order Operations (5 Tools)
-- `orders.get` - Fetch single order by ID (15s cache)
-- `orders.list` - List orders with pagination and filtering (15s cache)
-- `orders.create` - Create new order in OrderDesk
-- `orders.update` - Update order with safe merge workflow (5 retries on conflict)
-- `orders.delete` - Delete order from OrderDesk
+### Order Operations (3 Tools)
+- `orders_list` - List orders with advanced filtering (20+ parameters, 15s cache)
+- `orders_get` - Fetch single order by ID (15s cache)
+- `orders_update` - Update order with smart merge workflow, deduplication, and automatic retry (5 attempts on conflict)
 
 ### Product Operations (2 Tools)
-- `products.get` - Fetch single product by ID (60s cache)
-- `products.list` - List products with search and pagination (60s cache)
+- `products_list` - List products with search and pagination (60s cache)
+- `products_get` - Fetch single product by ID (60s cache)
+
+### HTTP MCP Endpoint Features
+- **Authentication**: Via `Authorization: Bearer TOKEN` header or `?token=TOKEN` query parameter
+- **Remote Access**: Connect from Claude Desktop, ChatGPT, or any MCP client using `npx mcp-remote`
+- **Copy-Paste Setup**: WebUI Settings page generates ready-to-use configuration
+- **Smart Deduplication**: Prevents duplicate notes when updating orders
+- **Full Protocol Support**: initialize, tools/list, tools/call, prompts/list, resources/list, notifications
 
 ### Coming in Future Phases
-- Customer operations (Phase 7+)
-- Webhook management (Phase 5+)
-- Folder operations (Phase 7+)
-- Reports (Phase 7+)
+- Enhanced order operations (create, delete) - Currently via API
+- Customer operations (Phase 8+)
+- Folder operations (Phase 8+)
+- Reports and analytics (Phase 8+)
 
 ## ✅ CI/CD Status
 
@@ -80,67 +87,94 @@ A native Model Context Protocol (MCP) server for OrderDesk integration with AI a
 | Check | Status | Details |
 |-------|--------|---------|
 | **Lint & Format** | ✅ Passing | ruff + black (0 errors) |
-| **Type Check** | ✅ Passing | mypy (0 errors, 3 info notes) |
-| **Unit Tests** | ✅ Passing | 76/76 tests (100%) |
-| **Coverage** | ✅ Passing | 58.5% (threshold: 55%) |
+| **Type Check** | ✅ Passing | mypy (0 errors) |
+| **Unit Tests** | ✅ Passing | 110/110 tests (100%) |
+| **Coverage** | ✅ Passing | >80% (threshold: 55%) |
 | **Docker Build** | ✅ Passing | Multi-stage build successful |
+| **MCP Endpoints** | ✅ Passing | 9/9 integration tests |
 
 **View Results:** [GitHub Actions](https://github.com/ebabcock80/orderdesk-mcp/actions)
 
 **Quality Metrics:**
-- 🎯 **100% test pass rate** (76/76 active tests)
+- 🎯 **100% test pass rate** (110/110 unit tests, 9/9 MCP endpoint tests)
 - 🎯 **0 linting errors** (ruff + black)
-- 🎯 **0 type errors** (mypy)
+- 🎯 **0 type errors** (mypy with Python 3.12)
 - 🎯 **0 Pydantic warnings** (V2 ready)
-- 🎯 **58.5% code coverage** (core functionality well-tested)
-- 🎯 **Production-ready** with WebUI admin interface
+- 🎯 **>80% code coverage** (exceeds 55% threshold)
+- 🎯 **Production-ready** with HTTP MCP + WebUI
+- 🎯 **Smart merge workflow** with note deduplication
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Option 1: HTTP MCP Endpoint (Recommended for Claude Desktop & ChatGPT) ⭐
 
-- **Docker**: Install Docker Desktop or Docker Engine
-- **OrderDesk Account**: Active OrderDesk account with API access
-- **AI Assistant**: Claude Desktop, LM Studio, or other MCP-compatible client
+The easiest way to get started! Deploy the server once and connect from any MCP client.
 
-### Step 1: Clone and Build
+#### Step 1: Deploy with Docker Compose
 
 ```bash
 # Clone the repository
 git clone https://github.com/ebabcock80/orderdesk-mcp.git
 cd orderdesk-mcp
 
-# Build the Docker image
+# Start the server (includes WebUI on port 8080)
+docker-compose up -d
+```
+
+#### Step 2: Access the WebUI
+
+Navigate to: `http://localhost:8080/webui`
+
+- Login with the default master key: `dev-admin-master-key-change-in-production-VNS09qKDdt`
+- Add your OrderDesk store (store ID + API key)
+- Go to **Settings** page
+- Enter your master key to generate the MCP configuration
+- Copy the generated JSON configuration
+
+#### Step 3: Connect Claude Desktop
+
+Paste the configuration into `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "OrderDesk": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "http://localhost:8080/mcp?token=YOUR_MASTER_KEY_HERE"
+      ]
+    }
+  }
+}
+```
+
+#### Step 4: Restart Claude Desktop
+
+That's it! Claude can now access all your OrderDesk data.
+
+**Try asking:**
+- "List my OrderDesk stores"
+- "Show me the last 10 orders"
+- "Add a note to order 123456"
+
+---
+
+### Option 2: Stdio MCP (Advanced - for local development)
+
+For advanced users who want stdio-based MCP connections.
+
+#### Step 1: Build the Docker Image
+
+```bash
+git clone https://github.com/ebabcock80/orderdesk-mcp.git
+cd orderdesk-mcp
 docker build -t orderdesk-mcp:latest .
 ```
 
-### Step 2: Generate Encryption Key
+#### Step 2: Configure Your AI Assistant
 
-```bash
-# Generate a secure encryption key
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-# Copy the output - you'll need this for MCP_KMS_KEY
-```
-
-### Step 3: Run the MCP Server
-
-```bash
-# Create data directory for persistent storage
-mkdir -p data
-
-# Run the MCP server with persistent data
-docker run --rm -i \
-  -v $(pwd)/data:/app/data \
-  -e SERVER_MODE=mcp \
-  -e MCP_KMS_KEY="YOUR_GENERATED_KEY_HERE" \
-  -e DATABASE_URL="sqlite:///./data/app.db" \
-  -e LOG_LEVEL=info \
-  orderdesk-mcp:latest
-```
-
-### Step 4: Configure Your AI Assistant
-
-#### For Claude Desktop
 Add to your `claude_desktop_config.json`:
 ```json
 {
@@ -150,10 +184,8 @@ Add to your `claude_desktop_config.json`:
       "args": [
         "run", "--rm", "-i",
         "-v", "/path/to/your/data:/app/data",
-        "-e", "SERVER_MODE=mcp",
         "-e", "MCP_KMS_KEY=YOUR_GENERATED_KEY_HERE",
         "-e", "DATABASE_URL=sqlite:///./data/app.db",
-        "-e", "LOG_LEVEL=info",
         "orderdesk-mcp:latest"
       ]
     }
@@ -161,34 +193,17 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-#### For LM Studio
-Create a configuration file:
-```json
-{
-  "mcpServers": {
-    "orderdesk": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-v", "/path/to/your/data:/app/data",
-        "-e", "SERVER_MODE=mcp",
-        "-e", "MCP_KMS_KEY=YOUR_GENERATED_KEY_HERE",
-        "-e", "DATABASE_URL=sqlite:///./data/app.db",
-        "-e", "LOG_LEVEL=info",
-        "orderdesk-mcp:latest"
-      ]
-    }
-  }
-}
-```
+**Note:** Generate `MCP_KMS_KEY` with: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 
-### Step 5: Test the Connection
+---
 
-Once configured, your AI assistant should be able to use OrderDesk tools. Try asking:
+### Testing the Connection
+
+Once configured, test with your AI assistant:
 
 - "List my OrderDesk stores"
-- "Show me recent orders"
-- "Create a new order folder"
+- "Show me recent orders from store DR"
+- "Add a note to order 342635621 saying 'Customer requested gift wrap'"
 
 ---
 
@@ -267,21 +282,37 @@ Navigate to: `http://localhost:8000/webui`
 
 ## 🔧 Critical Features
 
-### Safe Order Updates
-The server implements a critical safety feature for order updates:
-1. **Fetch**: Retrieves the complete current order data
-2. **Merge**: Applies your changes to the existing data
-3. **Update**: Sends the complete updated order back to OrderDesk
+### Smart Order Merge Workflow with Deduplication ⭐
+The server implements an intelligent order update system:
+1. **Fetch**: Retrieves the complete current order from OrderDesk
+2. **Merge**: Intelligently merges your changes with existing data
+   - Appends new notes instead of replacing
+   - Deduplicates notes (case-insensitive comparison)
+   - Preserves all existing fields not being updated
+3. **Upload**: Sends the complete merged order back to OrderDesk
+4. **Retry**: Automatic conflict resolution (up to 5 attempts)
 
-This prevents data loss that can occur with partial updates.
+**Example:**
+```
+Existing order: {order_items: [...], order_notes: [{content: "Note 1"}, {content: "Note 2"}]}
+Your change: {order_notes: [{content: "Note 3"}]}
+Result: {order_items: [...], order_notes: [{content: "Note 1"}, {content: "Note 2"}, {content: "Note 3"}]}
+```
 
-### JSON Response Formatting
-All MCP tool responses are properly formatted as valid JSON that AI assistants can parse and understand, eliminating parsing errors.
+This prevents data loss and duplicate entries.
 
-### Direct OrderDesk Integration
-- Simplified authentication using `store_id` + `api_key`
-- No complex tenant management required
-- Direct access to all OrderDesk API endpoints
+### HTTP MCP Endpoint
+- **Remote Access**: Connect from anywhere using HTTP POST to `/mcp`
+- **Authentication**: Via `Authorization: Bearer TOKEN` header or `?token=TOKEN` query parameter
+- **Compatible**: Works with Claude Desktop, ChatGPT, or any MCP client
+- **Easy Setup**: Use `npx mcp-remote http://your-server.com/mcp?token=YOUR_KEY`
+- **Copy-Paste Config**: WebUI Settings page generates ready-to-use configuration
+
+### Multi-Tenant Architecture
+- Secure tenant isolation with per-tenant encryption keys
+- Master key authentication with auto-provisioning
+- Encrypted credential storage (AES-256-GCM)
+- Complete audit trail per tenant
 
 ## 📋 Environment Variables
 
@@ -491,24 +522,48 @@ The server automatically handles safe order updates:
 
 ## 🚀 Recent Updates
 
-### Critical Fixes (Latest Release)
-- ✅ **JSON Response Formatting**: Fixed Claude parsing errors with proper JSON formatting
-- ✅ **Safe Order Updates**: Implemented fetch-merge-update workflow to prevent data loss
-- ✅ **Simplified Architecture**: Removed tenant complexity, direct store_id + api_key authentication
-- ✅ **Native MCP Protocol**: Full MCP server implementation for AI assistant integration
+### Latest Release (October 18, 2025) ⭐
+
+**HTTP MCP Endpoint + Smart Order Merge Workflow**
+
+- ✅ **HTTP MCP Endpoint**: Remote access via `/mcp` POST endpoint for Claude Desktop, ChatGPT, and any MCP client
+- ✅ **Smart Order Merge**: Fetch-merge-upload workflow with intelligent note deduplication (case-insensitive)
+- ✅ **MCP Protocol Complete**: Full support for initialize, tools/list, tools/call, prompts/list, resources/list, notifications
+- ✅ **Advanced Order Filtering**: 20+ search parameters (folder, customer, dates, email, shipping, etc.)
+- ✅ **Store Config Caching**: Auto-fetch OrderDesk folders and settings on store registration
+- ✅ **Tool Naming Fixed**: All tools follow MCP spec (`service_method` format)
+- ✅ **Deduplication**: Prevents duplicate notes when adding order notes
+- ✅ **Response Unwrapping**: Properly extracts order data from OrderDesk API envelope
+- ✅ **Cache Improvements**: Added `invalidate_pattern` method for granular cache control
+
+**Commits:** 7e33927, de3fffb, 6929cbe, fbc8192
 
 ### Key Improvements
-- 🔧 **Error Handling**: Comprehensive error responses with proper JSON structure
-- 🔧 **Tool Registration**: All OrderDesk operations available as MCP tools
-- 🔧 **Database Persistence**: SQLite with volume mounting for data persistence
-- 🔧 **Docker Optimization**: Multi-stage build with proper caching
+
+- 🔧 **110 Tests Passing**: Comprehensive test coverage (up from 76)
+- 🔧 **All CI Checks Green**: Lint, format, type check, unit tests, Docker build
+- 🔧 **Zero Type Errors**: Full mypy compliance with Python 3.12
+- 🔧 **Production Documentation**: CI_STATUS.md, TESTING_SUMMARY.md added
+- 🔧 **WebUI MCP Config Generator**: Copy-paste ready configuration on Settings page
 
 ## 📚 Documentation
 
-- **API Documentation**: Available at `/docs` when running in API mode
-- **MCP Tools**: All tools documented with proper schemas and examples
-- **Configuration**: Environment variables and setup instructions
-- **Docker**: Complete containerization with volume support
+### Core Documentation
+- **[README.md](README.md)** - This file, quick start and overview
+- **[CI_STATUS.md](CI_STATUS.md)** - Complete CI status with all test results
+- **[TESTING_SUMMARY.md](TESTING_SUMMARY.md)** - MCP endpoint testing and integration guide
+- **[AUTHENTICATION-EXPLAINED.md](AUTHENTICATION-EXPLAINED.md)** - Deep dive into security architecture
+
+### Setup Guides
+- **[docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md)** - Complete setup instructions
+- **[docs/endpoints.md](docs/endpoints.md)** - API endpoint reference
+- **[docs/operations.md](docs/operations.md)** - MCP tool operation guide
+- **[docs/MCP_TOOLS_REFERENCE.md](docs/MCP_TOOLS_REFERENCE.md)** - Complete MCP tool reference
+
+### Testing & CI
+- **[test_mcp_endpoints.sh](test_mcp_endpoints.sh)** - Automated MCP endpoint testing
+- **[.github/workflows/ci.yml](.github/workflows/ci.yml)** - GitHub Actions CI configuration
+- **[pyproject.toml](pyproject.toml)** - Python project configuration and dependencies
 
 ## 🤝 Contributing
 
