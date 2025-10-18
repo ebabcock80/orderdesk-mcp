@@ -11,7 +11,7 @@ MCP Tools:
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from mcp_server.models.common import NotFoundError, OrderDeskError, ValidationError
@@ -580,19 +580,21 @@ async def add_note_to_order(
 
 class GetOrderParams(BaseModel):
     """Parameters for orders.get tool."""
-    order_id: str = Field(..., description="OrderDesk order ID")
-    store_identifier: str | None = Field(
-        None,
-        description="Store ID or name (optional if active store is set)"
-    )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "order_id": "123456",
                 "store_identifier": "production"
             }
         }
+    )
+
+    order_id: str = Field(..., description="OrderDesk order ID")
+    store_identifier: str | None = Field(
+        None,
+        description="Store ID or name (optional if active store is set)"
+    )
 
 
 class ListOrdersParams(BaseModel):

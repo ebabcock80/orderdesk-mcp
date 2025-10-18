@@ -27,10 +27,14 @@ from sqlalchemy import (
     event,
 )
 from sqlalchemy.engine import Engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-Base = declarative_base()
+
+# Database base class (SQLAlchemy 2.0 style)
+class Base(DeclarativeBase):
+    """Base class for all ORM models."""
+
+    pass
 
 
 # Enable foreign key support for SQLite
