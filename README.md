@@ -12,6 +12,7 @@ A native Model Context Protocol (MCP) server for OrderDesk integration with AI a
 
 ## 🚀 Features
 
+### Core MCP Features
 - **Native MCP Protocol**: Direct integration with Claude, LM Studio, and other MCP-compatible AI assistants
 - **Safe Order Updates**: Fetch → Merge → Update workflow prevents data loss
 - **Direct OrderDesk Integration**: Simplified architecture using store_id + api_key authentication
@@ -19,6 +20,18 @@ A native Model Context Protocol (MCP) server for OrderDesk integration with AI a
 - **JSON Response Formatting**: Properly formatted responses for AI assistant parsing
 - **Docker Ready**: Multi-stage Docker build with health checks
 - **Persistent Storage**: SQLite database with volume mounting for data persistence
+
+### 🎨 NEW: WebUI Admin Interface (Phase 5) ⭐
+- **Professional Dashboard**: Visual overview of stores, API status, and quick actions
+- **Store Management**: Full CRUD operations for OrderDesk store registrations
+- **Interactive API Console**: Test all 13 MCP tools directly from your browser
+- **Secure Authentication**: JWT sessions with master key login
+- **Mobile Responsive**: Works on desktop, tablet, and mobile
+- **Real-time Feedback**: Instant response display with syntax highlighting
+- **Request History**: Track your last 10 API requests
+- **Settings Page**: View configuration and system information
+
+**Access the WebUI:** Set `ENABLE_WEBUI=true` in `.env` and visit `http://localhost:8000/webui`
 
 ## 🛠️ Implemented MCP Tools (13 Total)
 
