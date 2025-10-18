@@ -163,6 +163,40 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # Email Configuration (Phase 6)
+    # =========================================================================
+    enable_public_signup: bool = Field(
+        default=False, description="Enable public signup with email verification"
+    )
+    require_email_verification: bool = Field(
+        default=True, description="Require email verification for signup"
+    )
+    
+    # SMTP Settings
+    smtp_host: str | None = Field(default=None, description="SMTP server hostname")
+    smtp_port: int = Field(default=587, description="SMTP server port")
+    smtp_username: str | None = Field(default=None, description="SMTP username")
+    smtp_password: str | None = Field(default=None, description="SMTP password")
+    smtp_use_tls: bool = Field(default=True, description="Use TLS for SMTP")
+    smtp_from_email: str | None = Field(
+        default=None, description="Default sender email address"
+    )
+    
+    # Email Provider
+    email_provider: str = Field(
+        default="console",
+        description="Email provider (smtp, console)",
+    )
+    
+    # Signup Rate Limiting
+    signup_rate_limit_per_hour: int = Field(
+        default=3, description="Max signups per IP per hour"
+    )
+    signup_verification_expiry: int = Field(
+        default=900, description="Email verification expiry (seconds, default 15 min)"
+    )
+
+    # =========================================================================
     # Testing Configuration
     # =========================================================================
     orderdesk_test_enabled: bool = Field(

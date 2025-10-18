@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email - OrderDesk MCP</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo h1 {
+            color: #4F46E5;
+            margin: 0;
+            font-size: 24px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4F46E5;
+            color: white !important;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            margin: 20px 0;
+        }
+        .button:hover {
+            background-color: #4338CA;
+        }
+        .code-box {
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 16px;
+            margin: 20px 0;
+            font-family: 'Courier New', Courier, monospace;
+            word-break: break-all;
+        }
+        .warning {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 16px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .footer {
+            text-align: center;
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>🔐 OrderDesk MCP</h1>
+        </div>
+
+        <h2>Verify Your Email Address</h2>
+
+        <p>Hello!</p>
+
+        <p>Thank you for signing up for OrderDesk MCP Server. Please verify your email address by clicking the button below:</p>
+
+        <div style="text-align: center;">
+            <a href="{{ verification_link }}" class="button">Verify Email Address</a>
+        </div>
+
+        <p style="color: #6b7280; font-size: 14px;">Or copy and paste this link into your browser:</p>
+        <div class="code-box">{{ verification_link }}</div>
+
+        {% if master_key %}
+        <div class="warning">
+            <h3 style="margin-top: 0;">⚠️ Important: Save Your Master Key</h3>
+            <p>Your master key has been generated. <strong>Save it now</strong> - you will need it to log in, and it cannot be recovered!</p>
+            <div class="code-box" style="background-color: white;">
+                <strong>Master Key:</strong><br>
+                {{ master_key }}
+            </div>
+            <p style="font-size: 14px; color: #dc2626; margin-bottom: 0;">
+                ⚠️ Keep this key secure! Anyone with this key can access your account.
+            </p>
+        </div>
+        {% endif %}
+
+        <p><strong>This link will expire in 15 minutes.</strong></p>
+
+        <p>If you didn't request this verification, please ignore this email.</p>
+
+        <div class="footer">
+            <p>OrderDesk MCP Server</p>
+            <p style="font-size: 12px; color: #9ca3af;">
+                This is an automated message. Please do not reply to this email.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+

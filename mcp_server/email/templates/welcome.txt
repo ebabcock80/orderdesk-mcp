@@ -1,0 +1,51 @@
+Welcome to OrderDesk MCP!
+==========================
+
+Hello {{ email }}!
+
+Your account has been successfully created. You're now ready to integrate OrderDesk with AI assistants using the Model Context Protocol (MCP).
+
+🔑 YOUR MASTER KEY
+------------------
+
+IMPORTANT: Save this key immediately! You'll need it to log in, and it CANNOT be recovered if lost.
+
+Master Key: {{ master_key }}
+
+⚠️ Never share this key with anyone. Anyone with this key can access your account.
+
+
+✨ WHAT YOU CAN DO:
+-------------------
+
+- Register Stores: Connect your OrderDesk stores securely
+- AI Integration: Use 13 MCP tools with Claude and other AI assistants
+- Manage Orders: Read, create, update, and delete orders
+- Product Catalog: Search and manage your product inventory
+- WebUI Admin: Manage everything via our professional web interface
+
+
+🚀 GETTING STARTED:
+-------------------
+
+1. Log in to the WebUI with your master key
+2. Navigate to "Stores" and register your first OrderDesk store
+3. Test the connection to verify it works
+4. Start using MCP tools with your AI assistant!
+
+
+📚 DOCUMENTATION:
+-----------------
+
+Check out our comprehensive documentation:
+- Setup Guide: Getting started instructions
+- MCP Tools Reference: All 13 available tools
+- Operations Guide: Common workflows
+- API Documentation: REST endpoints
+
+If you have any questions, check the documentation or reach out to support.
+
+---
+OrderDesk MCP Server v0.1.0-alpha
+This is an automated message. Please do not reply to this email.
+

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to OrderDesk MCP</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo h1 {
+            color: #4F46E5;
+            margin: 0;
+            font-size: 28px;
+        }
+        .hero {
+            text-align: center;
+            font-size: 48px;
+            margin: 20px 0;
+        }
+        .code-box {
+            background-color: #f9fafb;
+            border: 2px solid #4F46E5;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'Courier New', Courier, monospace;
+            word-break: break-all;
+            text-align: center;
+        }
+        .warning {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 16px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .feature-list {
+            background-color: #f0fdf4;
+            border-left: 4px solid: #10b981;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .feature-list ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .feature-list li {
+            margin: 8px 0;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4F46E5;
+            color: white !important;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>🔐 OrderDesk MCP</h1>
+        </div>
+
+        <div class="hero">🎉</div>
+
+        <h2 style="text-align: center;">Welcome to OrderDesk MCP!</h2>
+
+        <p>Hello <strong>{{ email }}</strong>!</p>
+
+        <p>Your account has been successfully created. You're now ready to integrate OrderDesk with AI assistants using the Model Context Protocol (MCP).</p>
+
+        <div class="warning">
+            <h3 style="margin-top: 0;">🔑 Your Master Key</h3>
+            <p><strong>IMPORTANT:</strong> Save this key immediately! You'll need it to log in, and it <strong>cannot be recovered</strong> if lost.</p>
+            <div class="code-box">
+                {{ master_key }}
+            </div>
+            <p style="font-size: 14px; color: #dc2626; margin-bottom: 0;">
+                ⚠️ Never share this key with anyone. Anyone with this key can access your account.
+            </p>
+        </div>
+
+        <div class="feature-list">
+            <h3 style="margin-top: 0; color: #10b981;">✨ What You Can Do:</h3>
+            <ul>
+                <li><strong>Register Stores:</strong> Connect your OrderDesk stores securely</li>
+                <li><strong>AI Integration:</strong> Use 13 MCP tools with Claude and other AI assistants</li>
+                <li><strong>Manage Orders:</strong> Read, create, update, and delete orders</li>
+                <li><strong>Product Catalog:</strong> Search and manage your product inventory</li>
+                <li><strong>WebUI Admin:</strong> Manage everything via our professional web interface</li>
+            </ul>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ login_url|default('http://localhost:8000/webui/login', true) }}" class="button">Log In Now</a>
+        </div>
+
+        <h3>🚀 Getting Started:</h3>
+        <ol>
+            <li>Log in to the WebUI with your master key</li>
+            <li>Navigate to "Stores" and register your first OrderDesk store</li>
+            <li>Test the connection to verify it works</li>
+            <li>Start using MCP tools with your AI assistant!</li>
+        </ol>
+
+        <h3>📚 Documentation:</h3>
+        <p>Check out our comprehensive documentation:</p>
+        <ul>
+            <li><strong>Setup Guide:</strong> Getting started instructions</li>
+            <li><strong>MCP Tools Reference:</strong> All 13 available tools</li>
+            <li><strong>Operations Guide:</strong> Common workflows</li>
+            <li><strong>API Documentation:</strong> REST endpoints</li>
+        </ul>
+
+        <p>If you have any questions, check the documentation or reach out to support.</p>
+
+        <div class="footer">
+            <p><strong>OrderDesk MCP Server v0.1.0-alpha</strong></p>
+            <p style="font-size: 12px; color: #9ca3af;">
+                This is an automated message. Please do not reply to this email.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+

@@ -1,0 +1,28 @@
+OrderDesk MCP - Verify Your Email Address
+==========================================
+
+Hello!
+
+Thank you for signing up for OrderDesk MCP Server. Please verify your email address by visiting the link below:
+
+{{ verification_link }}
+
+{% if master_key %}
+⚠️ IMPORTANT: Save Your Master Key
+-----------------------------------
+
+Your master key has been generated. SAVE IT NOW - you will need it to log in, and it cannot be recovered!
+
+Master Key: {{ master_key }}
+
+⚠️ Keep this key secure! Anyone with this key can access your account.
+{% endif %}
+
+This link will expire in 15 minutes.
+
+If you didn't request this verification, please ignore this email.
+
+---
+OrderDesk MCP Server
+This is an automated message. Please do not reply to this email.
+
