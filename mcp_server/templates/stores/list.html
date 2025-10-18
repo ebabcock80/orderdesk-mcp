@@ -33,8 +33,10 @@
             <tbody class="divide-y divide-gray-200 bg-white">
                 {% for store in stores %}
                 <tr>
-                    <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                        {{ store.store_name }}
+                    <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium sm:pl-6">
+                        <a href="/webui/stores/{{ store.id }}" class="text-indigo-600 hover:text-indigo-900">
+                            {{ store.store_name }}
+                        </a>
                     </td>
                     <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                         <code class="rounded bg-gray-100 px-2 py-1 text-xs">{{ store.store_id }}</code>

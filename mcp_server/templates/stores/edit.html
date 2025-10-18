@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ store.store_name }} - OrderDesk MCP Server{% endblock %}
+{% block page_title %}Edit Store{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+    <!-- Back button -->
+    <div>
+        <a href="/webui/stores/{{ store.id }}" class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700">
+            <svg class="mr-1 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd" />
+            </svg>
+            Back to Store
+        </a>
+    </div>
+
+    <div class="bg-white shadow sm:rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            {% if error %}
+            <div class="mb-4 rounded-md bg-red-50 p-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800">{{ error }}</h3>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <form action="/webui/stores/{{ store.id }}/edit" method="POST" class="space-y-6">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+                <div>
+                    <label for="store_name" class="block text-sm font-medium leading-6 text-gray-900">
+                        Store Name <span class="text-red-500">*</span>
+                    </label>
+                    <div class="mt-2">
+                        <input type="text" name="store_name" id="store_name" required
+                               value="{{ store_name if store_name else store.store_name }}"
+                               class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+                    </div>
+                    <p class="mt-2 text-sm text-gray-500">A friendly name for this store registration.</p>
+                </div>
+
+                <div>
+                    <label for="label" class="block text-sm font-medium leading-6 text-gray-900">
+                        Label (Optional)
+                    </label>
+                    <div class="mt-2">
+                        <input type="text" name="label" id="label"
+                               value="{{ label if label else (store.label or '') }}"
+                               class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                               placeholder="Production">
+                    </div>
+                    <p class="mt-2 text-sm text-gray-500">Optional label to categorize this store.</p>
+                </div>
+
+                <div class="border-t border-gray-200 pt-6">
+                    <h4 class="text-base font-semibold leading-6 text-gray-900 mb-4">Update Credentials (Optional)</h4>
+                    <p class="text-sm text-gray-500 mb-4">Leave these fields blank to keep current credentials.</p>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label for="store_id" class="block text-sm font-medium leading-6 text-gray-900">
+                                OrderDesk Store ID
+                            </label>
+                            <div class="mt-2">
+                                <input type="text" name="store_id" id="store_id"
+                                       class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 font-mono"
+                                       placeholder="Leave blank to keep current">
+                            </div>
+                            <p class="mt-1 text-xs text-gray-500">Current: <code class="bg-gray-100 px-1 rounded">{{ store.store_id }}</code></p>
+                        </div>
+
+                        <div>
+                            <label for="api_key" class="block text-sm font-medium leading-6 text-gray-900">
+                                OrderDesk API Key
+                            </label>
+                            <div class="mt-2">
+                                <input type="password" name="api_key" id="api_key"
+                                       class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 font-mono"
+                                       placeholder="Leave blank to keep current">
+                            </div>
+                            <p class="mt-1 text-xs text-gray-500">🔒 Your API key is currently encrypted in the database.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-x-3 pt-4 border-t border-gray-200">
+                    <a href="/webui/stores/{{ store.id }}" class="text-sm font-semibold leading-6 text-gray-900">Cancel</a>
+                    <button type="submit" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Help text -->
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-yellow-800">Important Notes</h3>
+                <div class="mt-2 text-sm text-yellow-700">
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>Updating credentials will require re-encryption</li>
+                        <li>Leave credential fields blank to keep existing values</li>
+                        <li>Test the connection after updating to verify credentials work</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

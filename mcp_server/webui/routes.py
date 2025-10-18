@@ -283,6 +283,218 @@ async def delete_store(
     return RedirectResponse(url="/webui/stores", status_code=303)
 
 
+@router.get("/stores/{store_id}", response_class=HTMLResponse)
+async def store_details(
+    request: Request,
+    store_id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Display store details.
+
+    Args:
+        request: FastAPI request
+        store_id: Store database ID
+        user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Store details HTML page
+    """
+    tenant_id = user["tenant_id"]
+    store_service = StoreService(db)
+
+    # Get store
+    store = await store_service.get_store(tenant_id, store_id)
+    if not store:
+        # Store not found - redirect to list
+        return RedirectResponse(url="/webui/stores", status_code=303)
+
+    return templates.TemplateResponse(
+        "stores/details.html",
+        {
+            "request": request,
+            "user": user,
+            "store": store,
+            "csrf_token": generate_csrf_token(),
+        },
+    )
+
+
+@router.get("/stores/{store_id}/edit", response_class=HTMLResponse)
+async def edit_store_form(
+    request: Request,
+    store_id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Display edit store form."""
+    tenant_id = user["tenant_id"]
+    store_service = StoreService(db)
+
+    # Get store
+    store = await store_service.get_store(tenant_id, store_id)
+    if not store:
+        return RedirectResponse(url="/webui/stores", status_code=303)
+
+    return templates.TemplateResponse(
+        "stores/edit.html",
+        {
+            "request": request,
+            "user": user,
+            "store": store,
+            "csrf_token": generate_csrf_token(),
+            "error": None,
+        },
+    )
+
+
+@router.post("/stores/{store_id}/edit")
+async def edit_store(
+    request: Request,
+    store_id: int,
+    store_name: str = Form(...),
+    label: str = Form(None),
+    store_id_new: str = Form(None, alias="store_id"),
+    api_key: str = Form(None, alias="api_key"),
+    csrf_token: str = Form(...),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update store registration.
+
+    Args:
+        request: FastAPI request
+        store_id: Store database ID (from URL)
+        store_name: Updated store name
+        label: Updated label
+        store_id_new: New OrderDesk store ID (optional)
+        api_key: New API key (optional)
+        csrf_token: CSRF token
+        user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Redirect to store details on success
+    """
+    tenant_id = user["tenant_id"]
+    store_service = StoreService(db)
+
+    # Get existing store
+    store = await store_service.get_store(tenant_id, store_id)
+    if not store:
+        return RedirectResponse(url="/webui/stores", status_code=303)
+
+    try:
+        # Update store
+        # Note: Currently update_store doesn't exist in StoreService
+        # For now, we'll update the database directly
+
+        # Update basic info
+        store.store_name = store_name
+        store.label = label if label else None
+
+        # Update credentials if provided
+        if store_id_new and store_id_new.strip():
+            store.store_id = store_id_new
+
+        if api_key and api_key.strip():
+            # Re-encrypt API key
+            from mcp_server.auth.crypto import get_crypto_manager
+            from mcp_server.models.database import Tenant
+
+            tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+            if tenant:
+                crypto = get_crypto_manager()
+                ciphertext, tag, nonce = crypto.encrypt_api_key(
+                    api_key, tenant.master_key_hash, str(tenant.salt)
+                )
+                store.api_key_ciphertext = ciphertext
+                store.api_key_tag = tag
+                store.api_key_nonce = nonce
+
+        db.commit()
+
+        logger.info(
+            "Store updated via WebUI",
+            tenant_id=tenant_id,
+            store_id=store_id,
+            store_name=store_name,
+        )
+
+        # Redirect to store details
+        return RedirectResponse(
+            url=f"/webui/stores/{store_id}", status_code=303
+        )
+
+    except Exception as e:
+        logger.error("Failed to update store via WebUI", error=str(e))
+        db.rollback()
+
+        return templates.TemplateResponse(
+            "stores/edit.html",
+            {
+                "request": request,
+                "user": user,
+                "store": store,
+                "csrf_token": generate_csrf_token(),
+                "error": f"Failed to update store: {str(e)}",
+                "store_name": store_name,
+                "label": label,
+            },
+            status_code=400,
+        )
+
+
+@router.post("/stores/{store_id}/test")
+async def test_store_connection(
+    store_id: int,
+    csrf_token: str = Form(...),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Test store connection to OrderDesk API.
+
+    Args:
+        store_id: Store database ID
+        csrf_token: CSRF token
+        user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Redirect to store details with result (would show in flash message)
+    """
+    tenant_id = user["tenant_id"]
+    store_service = StoreService(db)
+
+    try:
+        # Test the connection
+        result = await store_service.test_store_credentials(tenant_id, store_id)
+
+        if result:
+            logger.info(
+                "Store connection test successful",
+                tenant_id=tenant_id,
+                store_id=store_id,
+            )
+        else:
+            logger.warning(
+                "Store connection test failed",
+                tenant_id=tenant_id,
+                store_id=store_id,
+            )
+
+    except Exception as e:
+        logger.error("Store connection test error", error=str(e))
+
+    # Redirect back to store details
+    # TODO: Add flash message to show test result
+    return RedirectResponse(url=f"/webui/stores/{store_id}", status_code=303)
+
+
 @router.get("/console", response_class=HTMLResponse)
 async def api_console(
     request: Request,
