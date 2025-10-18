@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}API Console - OrderDesk MCP Server{% endblock %}
+{% block page_title %}API Test Console{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="bg-white shadow sm:rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-base font-semibold leading-6 text-gray-900">Test MCP Tools</h3>
+            <div class="mt-2 max-w-xl text-sm text-gray-500">
+                <p>Select a tool below and provide the required parameters to test it.</p>
+            </div>
+
+            <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {% for tool in tools %}
+                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <h4 class="font-mono text-sm font-semibold text-indigo-600">{{ tool.name }}</h4>
+                    <p class="mt-1 text-sm text-gray-600">{{ tool.description }}</p>
+                    <div class="mt-2">
+                        {% if tool.params %}
+                        <p class="text-xs text-gray-500">Parameters: {{ tool.params|length }}</p>
+                        {% else %}
+                        <p class="text-xs text-gray-500">No parameters required</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-400">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-yellow-700">
+                            <strong>Coming Soon:</strong> Interactive API console is under development. For now, use the MCP protocol directly or the HTTP API endpoints.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

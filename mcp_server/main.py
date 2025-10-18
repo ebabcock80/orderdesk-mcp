@@ -43,6 +43,7 @@ from mcp_server.config import settings
 from mcp_server.models.common import AuthError
 from mcp_server.models.database import create_tables
 from mcp_server.routers import health, orders, products, stores  # webhooks - Phase 5+
+from mcp_server.webui import router as webui_router
 from mcp_server.utils.logging import logger
 from mcp_server.utils.proxy import (
     get_cloudflare_ray,
@@ -256,6 +257,12 @@ app.include_router(health.router)
 app.include_router(stores.router)
 app.include_router(orders.router)
 app.include_router(products.router)
+
+# WebUI (Phase 5 - optional)
+if settings.enable_webui:
+    app.include_router(webui_router)
+    logger.info("WebUI enabled", path="/webui")
+
 # Phase 5+ routers (not yet implemented):
 # app.include_router(webhooks.router)
 

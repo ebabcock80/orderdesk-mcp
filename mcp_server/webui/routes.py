@@ -1,0 +1,409 @@
+"""WebUI routes for OrderDesk MCP Server admin interface."""
+
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
+
+from mcp_server.config import settings
+from mcp_server.models.database import get_db
+from mcp_server.services.store import StoreService
+from mcp_server.utils.logging import logger
+from mcp_server.webui.auth import (
+    auth_manager,
+    create_session_cookie,
+    generate_csrf_token,
+    get_current_user,
+)
+
+router = APIRouter(prefix="/webui", tags=["webui"])
+
+# Configure Jinja2 templates
+templates = Jinja2Templates(directory="mcp_server/templates")
+
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """Display login page."""
+    csrf_token = generate_csrf_token()
+
+    return templates.TemplateResponse(
+        "login.html",
+        {
+            "request": request,
+            "csrf_token": csrf_token,
+            "error": None,
+        },
+    )
+
+
+@router.post("/login")
+async def login(
+    request: Request,
+    master_key: str = Form(...),
+    csrf_token: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Authenticate user with master key.
+
+    Args:
+        request: FastAPI request
+        master_key: Master key from form
+        csrf_token: CSRF token from form
+        db: Database session
+
+    Returns:
+        Redirect to dashboard on success, login page with error on failure
+    """
+    # Authenticate
+    success, tenant_id = await auth_manager.authenticate_master_key(master_key, db)
+
+    if not success or tenant_id is None:
+        # Authentication failed
+        new_csrf = generate_csrf_token()
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "csrf_token": new_csrf,
+                "error": "Invalid master key. Please try again.",
+            },
+            status_code=401,
+        )
+
+    # Create session token
+    session_token = auth_manager.create_session_token(tenant_id)
+
+    # Create response with session cookie
+    response = RedirectResponse(url="/webui/dashboard", status_code=303)
+    cookie_config = create_session_cookie(session_token)
+    response.set_cookie(**cookie_config)
+
+    logger.info("WebUI login successful", tenant_id=tenant_id)
+
+    return response
+
+
+@router.get("/logout")
+async def logout():
+    """Logout user by clearing session cookie."""
+    response = RedirectResponse(url="/webui/login", status_code=303)
+    response.delete_cookie("session")
+    return response
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(
+    request: Request,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Display admin dashboard.
+
+    Args:
+        request: FastAPI request
+        user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Dashboard HTML page
+    """
+    tenant_id = user["tenant_id"]
+
+    # Get stores for this tenant
+    store_service = StoreService(db)
+    stores = await store_service.list_stores(tenant_id)
+
+    # Get recent activity (audit logs)
+    # TODO: Implement when audit log service is ready
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "user": user,
+            "store_count": len(stores),
+            "stores": stores[:5],  # Show first 5
+            "csrf_token": generate_csrf_token(),
+        },
+    )
+
+
+@router.get("/stores", response_class=HTMLResponse)
+async def list_stores(
+    request: Request,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Display list of registered stores.
+
+    Args:
+        request: FastAPI request
+        user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Stores list HTML page
+    """
+    tenant_id = user["tenant_id"]
+
+    # Get all stores
+    store_service = StoreService(db)
+    stores = await store_service.list_stores(tenant_id)
+
+    return templates.TemplateResponse(
+        "stores/list.html",
+        {
+            "request": request,
+            "user": user,
+            "stores": stores,
+            "csrf_token": generate_csrf_token(),
+        },
+    )
+
+
+@router.get("/stores/add", response_class=HTMLResponse)
+async def add_store_form(
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    """Display add store form."""
+    return templates.TemplateResponse(
+        "stores/add.html",
+        {
+            "request": request,
+            "user": user,
+            "csrf_token": generate_csrf_token(),
+            "error": None,
+        },
+    )
+
+
+@router.post("/stores/add")
+async def add_store(
+    request: Request,
+    store_name: str = Form(...),
+    store_id: str = Form(...),
+    api_key: str = Form(...),
+    label: str = Form(None),
+    csrf_token: str = Form(...),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Add new store registration.
+
+    Args:
+        request: FastAPI request
+        store_name: Store name
+        store_id: OrderDesk store ID
+        api_key: OrderDesk API key
+        label: Optional label
+        csrf_token: CSRF token
+        user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Redirect to stores list on success
+    """
+    tenant_id = user["tenant_id"]
+    store_service = StoreService(db)
+
+    try:
+        # Register store
+        await store_service.create_store(
+            tenant_id=tenant_id,
+            store_name=store_name,
+            store_id=store_id,
+            api_key=api_key,
+            label=label,
+        )
+
+        logger.info(
+            "Store registered via WebUI",
+            tenant_id=tenant_id,
+            store_name=store_name,
+        )
+
+        # Redirect to stores list
+        return RedirectResponse(url="/webui/stores", status_code=303)
+
+    except Exception as e:
+        logger.error("Failed to register store via WebUI", error=str(e))
+
+        return templates.TemplateResponse(
+            "stores/add.html",
+            {
+                "request": request,
+                "user": user,
+                "csrf_token": generate_csrf_token(),
+                "error": f"Failed to register store: {str(e)}",
+                "store_name": store_name,
+                "store_id": store_id,
+                "label": label,
+            },
+            status_code=400,
+        )
+
+
+@router.post("/stores/{store_id}/delete")
+async def delete_store(
+    store_id: int,
+    csrf_token: str = Form(...),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Delete store registration.
+
+    Args:
+        store_id: Store database ID
+        csrf_token: CSRF token
+        user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Redirect to stores list
+    """
+    tenant_id = user["tenant_id"]
+    store_service = StoreService(db)
+
+    try:
+        await store_service.delete_store(tenant_id, store_id)
+        logger.info(
+            "Store deleted via WebUI", tenant_id=tenant_id, store_id=store_id
+        )
+    except Exception as e:
+        logger.error("Failed to delete store via WebUI", error=str(e))
+        # Still redirect, but could add flash message
+
+    return RedirectResponse(url="/webui/stores", status_code=303)
+
+
+@router.get("/console", response_class=HTMLResponse)
+async def api_console(
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Display API test console.
+
+    Args:
+        request: FastAPI request
+        user: Current authenticated user
+
+    Returns:
+        API console HTML page
+    """
+    # List of all available MCP tools
+    tools = [
+        {
+            "name": "tenant.use_master_key",
+            "description": "Authenticate with master key",
+            "params": [{"name": "master_key", "type": "string", "required": True}],
+        },
+        {
+            "name": "stores.register",
+            "description": "Register new store",
+            "params": [
+                {"name": "store_name", "type": "string", "required": True},
+                {"name": "store_id", "type": "string", "required": True},
+                {"name": "api_key", "type": "string", "required": True},
+                {"name": "label", "type": "string", "required": False},
+            ],
+        },
+        {
+            "name": "stores.list",
+            "description": "List all registered stores",
+            "params": [],
+        },
+        {
+            "name": "stores.use_store",
+            "description": "Set active store",
+            "params": [{"name": "store_name", "type": "string", "required": True}],
+        },
+        {
+            "name": "orders.get",
+            "description": "Get order by ID",
+            "params": [{"name": "order_id", "type": "string", "required": True}],
+        },
+        {
+            "name": "orders.list",
+            "description": "List orders with pagination",
+            "params": [
+                {"name": "limit", "type": "integer", "required": False},
+                {"name": "offset", "type": "integer", "required": False},
+                {"name": "search", "type": "string", "required": False},
+            ],
+        },
+        {
+            "name": "products.get",
+            "description": "Get product by ID",
+            "params": [{"name": "product_id", "type": "string", "required": True}],
+        },
+        {
+            "name": "products.list",
+            "description": "List products with search",
+            "params": [
+                {"name": "limit", "type": "integer", "required": False},
+                {"name": "offset", "type": "integer", "required": False},
+                {"name": "search", "type": "string", "required": False},
+            ],
+        },
+    ]
+
+    return templates.TemplateResponse(
+        "console.html",
+        {
+            "request": request,
+            "user": user,
+            "tools": tools,
+            "csrf_token": generate_csrf_token(),
+        },
+    )
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Display settings page.
+
+    Args:
+        request: FastAPI request
+        user: Current authenticated user
+
+    Returns:
+        Settings HTML page
+    """
+    config = {
+        "cache_backend": settings.cache_backend,
+        "enable_metrics": settings.enable_metrics,
+        "enable_audit_log": settings.enable_audit_log,
+        "log_level": settings.log_level,
+        "session_timeout": settings.session_timeout,
+        "version": "0.1.0-alpha",
+    }
+
+    return templates.TemplateResponse(
+        "settings.html",
+        {
+            "request": request,
+            "user": user,
+            "config": config,
+            "csrf_token": generate_csrf_token(),
+        },
+    )
+
+
+# Add root redirect
+@router.get("/", response_class=RedirectResponse)
+async def root():
+    """Redirect root to login or dashboard."""
+    return RedirectResponse(url="/webui/login")
+

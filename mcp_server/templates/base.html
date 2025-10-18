@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OrderDesk MCP Server{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="h-full">
+    <div class="min-h-full">
+        {% if user %}
+        <!-- Navigation -->
+        <nav class="bg-indigo-600">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex h-16 items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <h1 class="text-white text-xl font-bold">OrderDesk MCP</h1>
+                        </div>
+                        <div class="hidden md:block">
+                            <div class="ml-10 flex items-baseline space-x-4">
+                                <a href="/webui/dashboard" class="{% if request.url.path == '/webui/dashboard' %}bg-indigo-700 text-white{% else %}text-white hover:bg-indigo-500 hover:bg-opacity-75{% endif %} rounded-md px-3 py-2 text-sm font-medium">Dashboard</a>
+                                <a href="/webui/stores" class="{% if '/stores' in request.url.path %}bg-indigo-700 text-white{% else %}text-white hover:bg-indigo-500 hover:bg-opacity-75{% endif %} rounded-md px-3 py-2 text-sm font-medium">Stores</a>
+                                <a href="/webui/console" class="{% if request.url.path == '/webui/console' %}bg-indigo-700 text-white{% else %}text-white hover:bg-indigo-500 hover:bg-opacity-75{% endif %} rounded-md px-3 py-2 text-sm font-medium">API Console</a>
+                                <a href="/webui/settings" class="{% if request.url.path == '/webui/settings' %}bg-indigo-700 text-white{% else %}text-white hover:bg-indigo-500 hover:bg-opacity-75{% endif %} rounded-md px-3 py-2 text-sm font-medium">Settings</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="hidden md:block">
+                        <div class="ml-4 flex items-center md:ml-6">
+                            <a href="/webui/logout" class="text-white hover:bg-indigo-500 hover:bg-opacity-75 rounded-md px-3 py-2 text-sm font-medium">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        {% endif %}
+
+        <!-- Page header -->
+        {% if user %}
+        <header class="bg-white shadow-sm">
+            <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+                <h1 class="text-2xl font-bold leading-tight tracking-tight text-gray-900">{% block page_title %}Dashboard{% endblock %}</h1>
+            </div>
+        </header>
+        {% endif %}
+
+        <!-- Main content -->
+        <main>
+            <div class="mx-auto max-w-7xl {% if user %}px-4 py-6 sm:px-6 lg:px-8{% endif %}">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
+

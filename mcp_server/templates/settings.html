@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - OrderDesk MCP Server{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Configuration -->
+    <div class="bg-white shadow sm:rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-base font-semibold leading-6 text-gray-900">Configuration</h3>
+            <div class="mt-5">
+                <dl class="divide-y divide-gray-200">
+                    <div class="py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-5">
+                        <dt class="text-sm font-medium text-gray-500">Version</dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 font-mono">{{ config.version }}</dd>
+                    </div>
+                    <div class="py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-5">
+                        <dt class="text-sm font-medium text-gray-500">Cache Backend</dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                            <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                {{ config.cache_backend }}
+                            </span>
+                        </dd>
+                    </div>
+                    <div class="py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-5">
+                        <dt class="text-sm font-medium text-gray-500">Metrics Enabled</dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                            {% if config.enable_metrics %}
+                            <span class="inline-flex items-center gap-x-1.5 rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
+                                <svg class="h-1.5 w-1.5 fill-green-500" viewBox="0 0 6 6">
+                                    <circle cx="3" cy="3" r="3" />
+                                </svg>
+                                Yes
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">No</span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div class="py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-5">
+                        <dt class="text-sm font-medium text-gray-500">Audit Logging</dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
+                            {% if config.enable_audit_log %}
+                            <span class="inline-flex items-center gap-x-1.5 rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
+                                <svg class="h-1.5 w-1.5 fill-green-500" viewBox="0 0 6 6">
+                                    <circle cx="3" cy="3" r="3" />
+                                </svg>
+                                Enabled
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">Disabled</span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div class="py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-5">
+                        <dt class="text-sm font-medium text-gray-500">Log Level</dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 font-mono">{{ config.log_level }}</dd>
+                    </div>
+                    <div class="py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:py-5">
+                        <dt class="text-sm font-medium text-gray-500">Session Timeout</dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">{{ config.session_timeout // 60 }} minutes</dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <!-- Links -->
+    <div class="bg-white shadow sm:rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-base font-semibold leading-6 text-gray-900">Quick Links</h3>
+            <div class="mt-4 space-y-3">
+                <a href="/health" target="_blank" class="flex items-center text-sm text-indigo-600 hover:text-indigo-500">
+                    <svg class="mr-1.5 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Health Check
+                </a>
+                <a href="/health/ready" target="_blank" class="flex items-center text-sm text-indigo-600 hover:text-indigo-500">
+                    <svg class="mr-1.5 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Readiness Probe
+                </a>
+                <a href="/metrics" target="_blank" class="flex items-center text-sm text-indigo-600 hover:text-indigo-500">
+                    <svg class="mr-1.5 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Prometheus Metrics
+                </a>
+                <a href="/docs" target="_blank" class="flex items-center text-sm text-indigo-600 hover:text-indigo-500">
+                    <svg class="mr-1.5 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                    API Documentation
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
