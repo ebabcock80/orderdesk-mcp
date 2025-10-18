@@ -290,9 +290,12 @@ All MCP tool responses are properly formatted as valid JSON that AI assistants c
 | `SERVER_MODE` | Server mode: `mcp` or `api` | `mcp` | No |
 | `MCP_KMS_KEY` | Base64-encoded encryption key (32+ bytes) | - | Yes |
 | `DATABASE_URL` | SQLite database URL | `sqlite:///./data/app.db` | No |
+| `PUBLIC_URL` | Public URL for MCP client config | `http://localhost:8080` | No |
 | `LOG_LEVEL` | Logging level | `info` | No |
 | `TRUST_PROXY` | Trust proxy headers | `false` | No |
 | `AUTO_PROVISION_TENANT` | Auto-create tenants | `true` | No |
+| `ADMIN_MASTER_KEY` | Admin master key (auto-provisions) | - | No |
+| `ENABLE_PUBLIC_SIGNUP` | Allow public email signups | `false` | No |
 
 ## 🏭 Production Features
 

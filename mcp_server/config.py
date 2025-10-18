@@ -123,6 +123,12 @@ class Settings(BaseSettings):
         default=None,
         description="Admin master key for guaranteed access (auto-provisions on startup)",
     )
+    
+    # MCP Client Configuration
+    public_url: str = Field(
+        default="http://localhost:8080",
+        description="Public URL for MCP client configuration (e.g., https://your-domain.com)",
+    )
 
     # WebUI Rate Limiting
     webui_rate_limit_login: int = Field(

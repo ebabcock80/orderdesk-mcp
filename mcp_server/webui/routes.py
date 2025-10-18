@@ -1037,6 +1037,7 @@ async def execute_tool(
 async def settings_page(
     request: Request,
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Display settings page.
@@ -1049,6 +1050,7 @@ async def settings_page(
         Settings HTML page
     """
     import json
+    from mcp_server.services.tenant import TenantService
     
     # Server configuration
     config = {
@@ -1058,23 +1060,33 @@ async def settings_page(
         "log_level": settings.log_level,
         "session_timeout": settings.session_timeout,
         "version": "0.1.0-alpha",
+        "public_url": settings.public_url,
     }
     
-    # MCP configuration template for Claude/ChatGPT
-    # Users can copy this into their MCP settings
-    server_url = request.url.scheme + "://" + request.url.netloc
+    # Get user's email if available
+    from mcp_server.models.database import Tenant
+    tenant = db.query(Tenant).filter(Tenant.id == user["tenant_id"]).first()
+    user_email = tenant.email if tenant and tenant.email else "your-account"
+    
+    # MCP configuration template for Claude Desktop/ChatGPT
+    # Use PUBLIC_URL from settings, not request URL (for Docker/reverse proxy scenarios)
+    server_url = settings.public_url
+    
+    # Generate unique MCP server name based on user email
+    mcp_server_name = f"orderdesk-{user_email.split('@')[0]}" if '@' in user_email else "orderdesk"
+    
     mcp_config = {
         "mcpServers": {
-            "orderdesk": {
-                "command": "curl",
+            mcp_server_name: {
+                "command": "npx",
                 "args": [
-                    "-X", "POST",
-                    f"{server_url}/mcp",
-                    "-H", "Content-Type: application/json",
-                    "-H", f"Authorization: Bearer YOUR_MASTER_KEY_HERE",
-                    "-d", "@-"
+                    "-y",
+                    "@modelcontextprotocol/server-fetch",
+                    f"{server_url}/mcp"
                 ],
-                "description": "OrderDesk MCP Server - Manage orders, products, and stores"
+                "env": {
+                    "ORDERDESK_MASTER_KEY": "YOUR_MASTER_KEY_HERE"
+                }
             }
         }
     }
@@ -1089,6 +1101,7 @@ async def settings_page(
             "user": user,
             "config": config,
             "mcp_config_json": mcp_config_json,
+            "mcp_server_name": mcp_server_name,
             "server_url": server_url,
             "csrf_token": generate_csrf_token(),
         },
