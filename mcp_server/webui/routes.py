@@ -281,9 +281,7 @@ async def delete_store(
 
     try:
         await store_service.delete_store(tenant_id, str(store_id))
-        logger.info(
-            "Store deleted via WebUI", tenant_id=tenant_id, store_id=store_id
-        )
+        logger.info("Store deleted via WebUI", tenant_id=tenant_id, store_id=store_id)
     except Exception as e:
         logger.error("Failed to delete store via WebUI", error=str(e))
         # Still redirect, but could add flash message
@@ -433,9 +431,7 @@ async def edit_store(
         )
 
         # Redirect to store details
-        return RedirectResponse(
-            url=f"/webui/stores/{store_id}", status_code=303
-        )
+        return RedirectResponse(url=f"/webui/stores/{store_id}", status_code=303)
 
     except Exception as e:
         logger.error("Failed to update store via WebUI", error=str(e))
@@ -645,7 +641,12 @@ async def api_console(
             "name": "orders.update",
             "description": "Update order (safe merge with retries)",
             "params": [
-                {"name": "order_id", "type": "string", "required": True, "placeholder": "123456"},
+                {
+                    "name": "order_id",
+                    "type": "string",
+                    "required": True,
+                    "placeholder": "123456",
+                },
                 {
                     "name": "changes",
                     "type": "string",
@@ -852,4 +853,3 @@ async def settings_page(
 async def root():
     """Redirect root to login or dashboard."""
     return RedirectResponse(url="/webui/login")
-

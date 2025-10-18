@@ -128,4 +128,3 @@ def test_health_endpoints_no_auth_required(client: TestClient):
         response = client.get(endpoint)
         # Should not return 401
         assert response.status_code != status.HTTP_401_UNAUTHORIZED
-

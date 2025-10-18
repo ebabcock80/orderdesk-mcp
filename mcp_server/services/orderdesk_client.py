@@ -196,11 +196,11 @@ class OrderDeskClient:
             # Record metrics
             duration = time.perf_counter() - start_time
             ORDERDESK_API_CALLS.labels(
-                endpoint=path,
-                method=method,
-                status_code=str(response.status_code)
+                endpoint=path, method=method, status_code=str(response.status_code)
             ).inc()
-            ORDERDESK_API_DURATION.labels(endpoint=path, method=method).observe(duration)
+            ORDERDESK_API_DURATION.labels(endpoint=path, method=method).observe(
+                duration
+            )
 
             # Check for errors
             if response.status_code >= 400:

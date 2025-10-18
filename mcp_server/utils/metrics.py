@@ -142,15 +142,11 @@ DB_QUERY_DURATION = Histogram(
     buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),
 )
 
-DB_CONNECTIONS = Counter(
-    "db_connections_total", "Database connections", ["operation"]
-)
+DB_CONNECTIONS = Counter("db_connections_total", "Database connections", ["operation"])
 
 DB_POOL_SIZE = Gauge("db_pool_size", "Database connection pool size")
 
-DB_POOL_AVAILABLE = Gauge(
-    "db_pool_available", "Available database connections in pool"
-)
+DB_POOL_AVAILABLE = Gauge("db_pool_available", "Available database connections in pool")
 
 
 # ============================================================================
@@ -207,13 +203,9 @@ ORDERDESK_API_RETRIES = Counter(
 
 ACTIVE_TENANTS = Gauge("active_tenants_total", "Number of active tenants")
 
-ACTIVE_STORES = Gauge(
-    "active_stores_total", "Number of active stores", ["tenant_id"]
-)
+ACTIVE_STORES = Gauge("active_stores_total", "Number of active stores", ["tenant_id"])
 
-AUTH_ATTEMPTS = Counter(
-    "auth_attempts_total", "Authentication attempts", ["status"]
-)
+AUTH_ATTEMPTS = Counter("auth_attempts_total", "Authentication attempts", ["status"])
 
 
 # ============================================================================
@@ -255,9 +247,7 @@ async def track_mcp_tool(tool_name: str):
         MCP_TOOL_IN_PROGRESS.labels(tool_name=tool_name).dec()
 
 
-def record_cache_operation(
-    operation: str, resource_type: str, hit: bool | None = None
-):
+def record_cache_operation(operation: str, resource_type: str, hit: bool | None = None):
     """Record cache operation (hit, miss, set, invalidate)."""
     CACHE_OPERATIONS.labels(operation=operation, resource_type=resource_type).inc()
 
@@ -317,4 +307,3 @@ def get_metrics_summary() -> dict[str, Any]:
         "metrics_endpoint": "/metrics",
         "note": "Full metrics available at Prometheus /metrics endpoint",
     }
-

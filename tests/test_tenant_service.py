@@ -153,4 +153,3 @@ def test_master_key_hashing_is_unique(db_session: Session):
     auth1 = service.authenticate(master_key)
     assert auth1 is not None
     assert auth1.id in [tenant1.id, tenant2.id]  # Will match first one found
-

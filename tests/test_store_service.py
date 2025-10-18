@@ -268,4 +268,3 @@ async def test_tenant_isolation(db_session: Session):
     # Store should still exist for tenant1
     still_there = await service.get_store(str(tenant1.id), str(store.id))
     assert still_there is not None
-

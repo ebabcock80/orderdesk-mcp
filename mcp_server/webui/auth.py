@@ -171,4 +171,3 @@ def create_session_cookie(token: str) -> dict[str, Any]:
         "samesite": settings.session_cookie_samesite,
         "max_age": settings.session_timeout,
     }
-

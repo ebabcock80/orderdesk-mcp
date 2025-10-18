@@ -52,9 +52,11 @@ async def check_database() -> dict[str, Any]:
         return {
             "status": "healthy",
             "latency_ms": round(latency_ms, 2),
-            "url": settings.database_url.split("@")[-1]
-            if "@" in settings.database_url
-            else "sqlite",
+            "url": (
+                settings.database_url.split("@")[-1]
+                if "@" in settings.database_url
+                else "sqlite"
+            ),
         }
     except Exception as e:
         return {
@@ -252,10 +254,10 @@ async def readiness_check():
         cache_check = {"status": "unhealthy", "error": str(cache_check)}
 
     # Determine overall readiness
-    is_ready = (
-        db_check.get("status") == "healthy"
-        and cache_check.get("status") in ["healthy", "degraded"]
-    )
+    is_ready = db_check.get("status") == "healthy" and cache_check.get("status") in [
+        "healthy",
+        "degraded",
+    ]
 
     response_data = {
         "status": "ready" if is_ready else "not_ready",
