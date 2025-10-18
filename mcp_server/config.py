@@ -118,6 +118,12 @@ class Settings(BaseSettings):
         default="Strict", description="SameSite cookie attribute"
     )
 
+    # Admin Master Key (Optional - for development/testing)
+    admin_master_key: str | None = Field(
+        default=None,
+        description="Admin master key for guaranteed access (auto-provisions on startup)",
+    )
+
     # WebUI Rate Limiting
     webui_rate_limit_login: int = Field(
         default=5, description="Login attempts per IP per minute"

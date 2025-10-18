@@ -56,6 +56,73 @@ from mcp_server.utils.proxy import (
 from mcp_server.webui import router as webui_router
 
 
+def provision_admin_user():
+    """
+    Provision admin user if ADMIN_MASTER_KEY is set in environment.
+
+    This ensures guaranteed access for development/testing.
+    """
+    if not settings.admin_master_key:
+        return
+
+    from mcp_server.auth.crypto import hash_master_key
+    from mcp_server.models.database import Tenant, get_db
+
+    logger.info(
+        "admin_provisioning",
+        message="ADMIN_MASTER_KEY detected - provisioning admin account",
+    )
+
+    # Get database session
+    db = next(get_db())
+
+    try:
+        # Check if admin user already exists by trying to authenticate
+        from mcp_server.webui.auth import auth_manager
+
+        # Use a blocking call (sync) since this is startup
+        import asyncio
+
+        success, tenant_id = asyncio.run(
+            auth_manager.authenticate_master_key(settings.admin_master_key, db)
+        )
+
+        if success and tenant_id:
+            logger.info(
+                "admin_provisioning",
+                message="Admin account already exists",
+                tenant_id=tenant_id,
+            )
+            return
+
+        # Admin doesn't exist, create it
+        master_key_hash, salt = hash_master_key(settings.admin_master_key)
+
+        admin = Tenant(
+            master_key_hash=master_key_hash,
+            salt=salt,
+            email="admin@localhost",  # Default admin email
+            email_verified=True,  # Pre-verified
+        )
+
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+
+        logger.info(
+            "admin_provisioning",
+            message="Admin account created successfully",
+            tenant_id=admin.id,
+            email=admin.email,
+        )
+
+    except Exception as e:
+        logger.error("admin_provisioning_error", error=str(e))
+        db.rollback()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
@@ -65,6 +132,9 @@ async def lifespan(app: FastAPI):
     # Create database tables
     create_tables()
     logger.info("database_initialized", message="Database tables created")
+
+    # Provision admin user if ADMIN_MASTER_KEY is set
+    provision_admin_user()
 
     yield
 
