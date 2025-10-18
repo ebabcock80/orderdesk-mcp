@@ -552,11 +552,13 @@ async def list_products_mcp(
     except (NotFoundError, ValidationError):
         raise
     except OrderDeskError as e:
-        logger.error("OrderDesk API error", error=str(e), code=e.code)
+        logger.error("OrderDesk API error", error=str(e), code=e.code, details=e.details)
         raise ValidationError(f"Failed to list products: {e.message}")
     except Exception as e:
-        logger.error("Failed to list products", error=str(e))
-        raise ValidationError(f"Failed to list products: {str(e)}")
+        logger.error("Failed to list products", error=str(e), error_type=type(e).__name__)
+        import traceback
+        logger.error("Full traceback", traceback=traceback.format_exc())
+        raise ValidationError(f"Failed to list products: {type(e).__name__}: {str(e)}")
 
 
 # ============================================================================
