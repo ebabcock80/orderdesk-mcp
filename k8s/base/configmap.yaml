@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orderdesk-config
+  labels:
+    app: orderdesk-mcp
+data:
+  redis_url: "redis://orderdesk-redis:6379/0"
+  public_url: "http://localhost:8080"  # Override in overlays
+  log_level: "INFO"
+  cache_backend: "redis"
+  rate_limit_rpm: "120"
+  session_timeout: "28800"  # 8 hours
+  cache_ttl_orders: "15"
+  cache_ttl_products: "60"
+  cache_ttl_customers: "60"
+  cache_ttl_store_settings: "300"
+  http_timeout: "30"
+  http_max_retries: "3"
+  mutation_max_retries: "5"
+  enable_metrics: "true"
+  enable_webui: "true"
+  enable_audit_log: "true"
+  audit_log_retention_days: "90"
+

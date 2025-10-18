@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orderdesk-mcp
+  labels:
+    app: orderdesk-mcp
+    component: server
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: orderdesk-mcp
+  template:
+    metadata:
+      labels:
+        app: orderdesk-mcp
+        component: server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: mcp-server
+        image: orderdesk-mcp-server:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: PORT
+          value: "8080"
+        - name: DATABASE_URL
+          value: "sqlite:////app/data/app.db"
+        - name: CACHE_BACKEND
+          value: "redis"
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: orderdesk-config
+              key: redis_url
+        - name: MCP_KMS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: orderdesk-secrets
+              key: mcp_kms_key
+        - name: ADMIN_MASTER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: orderdesk-secrets
+              key: admin_master_key
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: orderdesk-secrets
+              key: jwt_secret_key
+        - name: CSRF_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: orderdesk-secrets
+              key: csrf_secret_key
+        - name: PUBLIC_URL
+          valueFrom:
+            configMapKeyRef:
+              name: orderdesk-config
+              key: public_url
+        - name: ENABLE_WEBUI
+          value: "true"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: TRUST_PROXY
+          value: "true"
+        - name: ENABLE_METRICS
+          value: "true"
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: orderdesk-data
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
