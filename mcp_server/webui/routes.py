@@ -90,8 +90,26 @@ async def login(
             status_code=401,
         )
 
-    # Create session token
-    session_token = auth_manager.create_session_token(tenant_id)
+    # Derive tenant key for credential decryption
+    from mcp_server.auth import crypto
+    from mcp_server.services.tenant import TenantService
+    
+    tenant_service = TenantService(db)
+    tenant = tenant_service.get_tenant_by_id(tenant_id)
+    
+    if not tenant:
+        new_csrf = generate_csrf_token()
+        return get_templates().TemplateResponse(
+            "login.html",
+            {"request": request, "csrf_token": new_csrf, "error": "Tenant not found."},
+            status_code=401,
+        )
+    
+    # Derive real tenant key from master key + salt
+    tenant_key = crypto.derive_tenant_key(master_key, str(tenant.salt))
+
+    # Create session token with tenant_key for credential decryption
+    session_token = auth_manager.create_session_token(tenant_id, tenant_key)
 
     # Update last_login timestamp (Phase 6)
     user_service = UserService(db)
@@ -875,9 +893,16 @@ async def execute_tool(
                 "error_type": "AuthError",
             }
         
-        # Set tenant context (with properly sized dummy key for WebUI - encryption handled by OrderDesk API)
-        # AES-256 requires 32 bytes
-        set_tenant(tenant_id, b"webui_session" + b"\x00" * 19)  # Pad to 32 bytes
+        # Set tenant context with REAL tenant key from session (for credential decryption)
+        # Extract tenant_key from session payload (stored during login)
+        tenant_key = user.get("tenant_key")
+        
+        if not tenant_key:
+            # Fallback to dummy key if not in session (shouldn't happen after login fix)
+            logger.warning("No tenant_key in session, using dummy key - decryption will fail!")
+            tenant_key = b"webui_session" + b"\x00" * 19  # Pad to 32 bytes
+        
+        set_tenant(tenant_id, tenant_key)
 
         # Execute tool
         start_time = time.perf_counter()

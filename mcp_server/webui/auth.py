@@ -19,16 +19,19 @@ class AuthManager:
         self.algorithm = "HS256"
         self.session_timeout = settings.session_timeout
 
-    def create_session_token(self, tenant_id: int) -> str:
+    def create_session_token(self, tenant_id: int, tenant_key: bytes | None = None) -> str:
         """
         Create JWT session token for authenticated user.
 
         Args:
             tenant_id: Authenticated tenant ID
+            tenant_key: Derived tenant encryption key (optional, for WebUI credential decryption)
 
         Returns:
             JWT token string
         """
+        import base64
+        
         expires = datetime.utcnow() + timedelta(seconds=self.session_timeout)
         payload = {
             "tenant_id": tenant_id,
@@ -36,6 +39,10 @@ class AuthManager:
             "iat": datetime.utcnow(),
             "type": "webui_session",
         }
+        
+        # Store tenant_key in session for credential decryption
+        if tenant_key:
+            payload["tenant_key"] = base64.b64encode(tenant_key).decode('utf-8')
 
         token = jwt.encode(payload, settings.jwt_secret_key, algorithm=self.algorithm)
         return token
@@ -147,10 +154,18 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return {
+    import base64
+    
+    user_dict = {
         "tenant_id": payload["tenant_id"],
         "authenticated": True,
     }
+    
+    # Extract tenant_key if present (for credential decryption)
+    if "tenant_key" in payload:
+        user_dict["tenant_key"] = base64.b64decode(payload["tenant_key"])
+    
+    return user_dict
 
 
 def create_session_cookie(token: str) -> dict[str, Any]:
