@@ -43,13 +43,13 @@ from mcp_server.config import settings
 from mcp_server.models.common import AuthError
 from mcp_server.models.database import create_tables
 from mcp_server.routers import health, orders, products, stores  # webhooks - Phase 5+
-from mcp_server.webui import router as webui_router
 from mcp_server.utils.logging import logger
 from mcp_server.utils.proxy import (
     get_cloudflare_ray,
     get_real_client_ip,
     should_add_hsts,
 )
+from mcp_server.webui import router as webui_router
 
 # Prometheus metrics - Enhanced for production monitoring
 REQUEST_COUNT = Counter(
@@ -298,6 +298,30 @@ async def auth_error_handler(request: Request, exc: AuthError):
     )
 
 
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc):
+    """Handle 404 errors with HTML for WebUI, JSON for API."""
+    # Return HTML for WebUI requests
+    if settings.enable_webui and request.url.path.startswith("/webui"):
+        from fastapi.templating import Jinja2Templates
+
+        templates = Jinja2Templates(directory="mcp_server/templates")
+        return templates.TemplateResponse(
+            "error_404.html", {"request": request}, status_code=404
+        )
+
+    # JSON for API requests
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": {
+                "code": "NOT_FOUND",
+                "message": f"Resource not found: {request.url.path}",
+            }
+        },
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for consistent error responses."""
@@ -311,6 +335,18 @@ async def global_exception_handler(request: Request, exc: Exception):
         method=request.method,
     )
 
+    # Return HTML for WebUI requests
+    if settings.enable_webui and request.url.path.startswith("/webui"):
+        from fastapi.templating import Jinja2Templates
+
+        templates = Jinja2Templates(directory="mcp_server/templates")
+        return templates.TemplateResponse(
+            "error_500.html",
+            {"request": request, "error_id": request_id},
+            status_code=500,
+        )
+
+    # JSON for API requests
     return JSONResponse(
         status_code=500,
         content={
