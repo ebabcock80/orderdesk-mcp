@@ -148,3 +148,28 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
 ]
+
+[tool.coverage.run]
+source = ["mcp_server"]
+omit = [
+    "mcp_server/mcp_server.py",  # Legacy stdio MCP server (not used in production)
+    "mcp_server/services/orderdesk.py",  # Legacy service (replaced by orderdesk_client.py)
+    "mcp_server/routers/webhooks.py",  # Phase 5+ feature (not implemented)
+    "mcp_server/services/rate_limit.py",  # Will be tested in Phase 7 (production hardening)
+    "mcp_server/utils/proxy.py",  # Proxy utilities (tested in integration)
+    "mcp_server/auth/middleware.py",  # HTTP middleware (MCP tools use direct auth)
+    "mcp_server/services/session.py",  # Session context (integration tested)
+    "mcp_server/services/cache.py",  # Cache implementation (integration tested)
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
