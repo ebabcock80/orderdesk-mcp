@@ -1,5 +1,5 @@
 # Multi-stage build for OrderDesk MCP Server
-FROM python:3.11-slim as builder
+FROM python:3.12-slim as builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -e .[webui]
 
 # Runtime stage
-FROM python:3.11-slim as runtime
+FROM python:3.12-slim as runtime
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -32,7 +32,7 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 WORKDIR /app
 
 # Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
@@ -41,8 +41,9 @@ COPY mcp_server/ ./mcp_server/
 # Create data directory and set permissions
 RUN mkdir -p /app/data && chown -R appuser:appuser /app
 
-# Switch to non-root user
-USER appuser
+# NOTE: Running as root for development/testing to avoid volume permission issues
+# For production, uncomment the USER directive below:
+# USER appuser
 
 # Expose port
 EXPOSE 8080
