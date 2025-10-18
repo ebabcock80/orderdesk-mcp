@@ -42,7 +42,7 @@ from mcp_server.auth.middleware import auth_middleware
 from mcp_server.config import settings
 from mcp_server.models.common import AuthError
 from mcp_server.models.database import create_tables
-from mcp_server.routers import health, orders, products, stores  # webhooks - Phase 5+
+from mcp_server.routers import health, orders, products, stores, mcp_http  # webhooks - Phase 5+
 from mcp_server.utils.logging import logger
 from mcp_server.utils.metrics import (
     REQUEST_COUNT,
@@ -244,6 +244,7 @@ app.include_router(health.router)
 app.include_router(stores.router)
 app.include_router(orders.router)
 app.include_router(products.router)
+app.include_router(mcp_http.router)  # HTTP MCP endpoint
 
 # WebUI (Phase 5 - optional)
 if settings.enable_webui:
