@@ -883,12 +883,21 @@ async def execute_tool(
         start_time = time.perf_counter()
 
         # Parse JSON strings in params if needed (for order_data, changes, etc.)
+        # Also remove empty string parameters (treat as None/omitted)
+        cleaned_params = {}
         for key, value in params.items():
+            # Skip empty strings for optional parameters
+            if isinstance(value, str) and value == "":
+                continue
+            # Parse JSON strings
             if isinstance(value, str) and value.startswith("{"):
                 try:
-                    params[key] = json_module.loads(value)
+                    cleaned_params[key] = json_module.loads(value)
                 except json_module.JSONDecodeError:
-                    pass  # Keep as string if not valid JSON
+                    cleaned_params[key] = value  # Keep as string if not valid JSON
+            else:
+                cleaned_params[key] = value
+        params = cleaned_params
 
         # Map console parameter names to actual Pydantic model parameter names
         # Console uses 'store_identifier' for UX clarity, but models use different names
