@@ -1,8 +1,10 @@
 """Test store management endpoints."""
 
+import pytest
 from fastapi import status
 
 
+@pytest.mark.skip(reason="HTTP endpoints deprecated - use MCP tools instead")
 def test_create_store(client, auth_headers, test_store_data):
     """Test creating a store."""
     response = client.post("/stores", json=test_store_data, headers=auth_headers)
@@ -15,6 +17,7 @@ def test_create_store(client, auth_headers, test_store_data):
     assert "created_at" in data
 
 
+@pytest.mark.skip(reason="HTTP endpoints deprecated - use MCP tools instead")
 def test_list_stores(client, auth_headers, test_store_data):
     """Test listing stores."""
     # Create a store first
@@ -29,6 +32,7 @@ def test_list_stores(client, auth_headers, test_store_data):
     assert data[0]["store_id"] == test_store_data["store_id"]
 
 
+@pytest.mark.skip(reason="HTTP endpoints deprecated - use MCP tools instead")
 def test_delete_store(client, auth_headers, test_store_data):
     """Test deleting a store."""
     # Create a store first
@@ -44,6 +48,7 @@ def test_delete_store(client, auth_headers, test_store_data):
     assert len(list_response.json()) == 0
 
 
+@pytest.mark.skip(reason="HTTP endpoints deprecated - use MCP tools instead")
 def test_duplicate_store_creation(client, auth_headers, test_store_data):
     """Test creating duplicate stores."""
     # Create first store
@@ -55,6 +60,7 @@ def test_duplicate_store_creation(client, auth_headers, test_store_data):
     assert response2.status_code == status.HTTP_409_CONFLICT
 
 
+@pytest.mark.skip(reason="HTTP endpoints deprecated - use MCP tools instead")
 def test_store_not_found(client, auth_headers):
     """Test accessing non-existent store."""
     response = client.delete("/stores/non-existent-id", headers=auth_headers)

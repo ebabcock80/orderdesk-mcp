@@ -239,6 +239,10 @@ class OrderDeskClient:
                 details={"method": method, "path": path, "error": str(e)},
             )
 
+        except OrderDeskError:
+            # Re-raise OrderDeskError as-is (from _handle_error_response)
+            raise
+
         except Exception as e:
             logger.error(
                 "OrderDesk API unexpected error",
@@ -744,21 +748,25 @@ class OrderDeskClient:
                 return updated_order
 
             except OrderDeskError as e:
-                if e.code == "CONFLICT_ERROR" and attempt < max_retries - 1:
-                    # Conflict detected - retry
-                    logger.warning(
-                        "Order update conflict, retrying",
-                        order_id=order_id,
-                        attempt=attempt + 1,
-                        max_retries=max_retries,
-                    )
+                if e.code == "CONFLICT_ERROR":
+                    if attempt < max_retries - 1:
+                        # Conflict detected - retry
+                        logger.warning(
+                            "Order update conflict, retrying",
+                            order_id=order_id,
+                            attempt=attempt + 1,
+                            max_retries=max_retries,
+                        )
 
-                    # Exponential backoff: 0.5s, 1s, 2s, 4s, 8s
-                    backoff_delay = 0.5 * (2**attempt)
-                    await self._backoff_fixed(backoff_delay)
-                    continue
+                        # Exponential backoff: 0.5s, 1s, 2s, 4s, 8s
+                        backoff_delay = 0.5 * (2**attempt)
+                        await self._backoff_fixed(backoff_delay)
+                        continue
+                    else:
+                        # Max retries reached for conflict - break to raise ConflictError
+                        break
 
-                # Other error or max retries - re-raise
+                # Other error (not conflict) - re-raise immediately
                 raise
 
         # Max retries exceeded
