@@ -209,16 +209,16 @@ async def add_store(
     Returns:
         Redirect to stores list on success
     """
-    tenant_id = user["tenant_id"]
+    tenant_id = str(user["tenant_id"])
     store_service = StoreService(db)
 
     try:
         # Register store
-        await store_service.create_store(
+        await store_service.register_store(
             tenant_id=tenant_id,
-            store_name=store_name,
             store_id=store_id,
             api_key=api_key,
+            store_name=store_name,
             label=label,
         )
 
@@ -268,11 +268,11 @@ async def delete_store(
     Returns:
         Redirect to stores list
     """
-    tenant_id = user["tenant_id"]
+    tenant_id = str(user["tenant_id"])
     store_service = StoreService(db)
 
     try:
-        await store_service.delete_store(tenant_id, store_id)
+        await store_service.delete_store(tenant_id, str(store_id))
         logger.info(
             "Store deleted via WebUI", tenant_id=tenant_id, store_id=store_id
         )
@@ -302,11 +302,11 @@ async def store_details(
     Returns:
         Store details HTML page
     """
-    tenant_id = user["tenant_id"]
+    tenant_id = str(user["tenant_id"])
     store_service = StoreService(db)
 
     # Get store
-    store = await store_service.get_store(tenant_id, store_id)
+    store = await store_service.get_store(tenant_id, str(store_id))
     if not store:
         # Store not found - redirect to list
         return RedirectResponse(url="/webui/stores", status_code=303)
@@ -330,11 +330,11 @@ async def edit_store_form(
     db: Session = Depends(get_db),
 ):
     """Display edit store form."""
-    tenant_id = user["tenant_id"]
+    tenant_id = str(user["tenant_id"])
     store_service = StoreService(db)
 
     # Get store
-    store = await store_service.get_store(tenant_id, store_id)
+    store = await store_service.get_store(tenant_id, str(store_id))
     if not store:
         return RedirectResponse(url="/webui/stores", status_code=303)
 

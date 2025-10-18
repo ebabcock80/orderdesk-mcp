@@ -22,7 +22,7 @@ try:
 except ImportError:
     # Fallback for when prometheus_client is not available
 
-    class Counter:
+    class Counter:  # type: ignore[no-redef]
         def __init__(self, *args, **kwargs):
             pass
 
@@ -32,7 +32,7 @@ except ImportError:
         def inc(self, amount=1):
             pass
 
-    class Histogram:
+    class Histogram:  # type: ignore[no-redef]
         def __init__(self, *args, **kwargs):
             pass
 
@@ -42,7 +42,7 @@ except ImportError:
         def observe(self, value):
             pass
 
-    class Gauge:
+    class Gauge:  # type: ignore[no-redef]
         def __init__(self, *args, **kwargs):
             pass
 

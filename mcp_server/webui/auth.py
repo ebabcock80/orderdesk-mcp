@@ -79,7 +79,7 @@ class AuthManager:
         tenant_service = TenantService(db)
 
         try:
-            tenant = await tenant_service.authenticate(master_key)
+            tenant = tenant_service.authenticate(master_key)
             if tenant:
                 logger.info("WebUI authentication successful", tenant_id=tenant.id)
                 return True, tenant.id

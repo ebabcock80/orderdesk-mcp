@@ -60,4 +60,8 @@ def test_health_endpoint_no_auth(client):
     """Test that health endpoint doesn't require authentication."""
     response = client.get("/health")
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert data["status"] == "ok"
+    assert "service" in data
+    assert "version" in data
+    assert "uptime_seconds" in data

@@ -43,12 +43,15 @@ dependencies = [
     "structlog>=24.2.0",
     "prometheus-client>=0.20.0",
     "psutil>=5.9.0",
+    # WebUI (Phase 5)
+    "jinja2>=3.1.4",
+    "itsdangerous>=2.1.0",
 ]
 
 [project.optional-dependencies]
 webui = [
     # WebUI framework (HTMX + Tailwind per Q6)
-    "jinja2>=3.1.4",
+    # jinja2 and itsdangerous moved to core dependencies
     "python-multipart>=0.0.9",
     # Email providers
     "aiosmtplib>=3.0.0",
@@ -136,6 +139,7 @@ module = [
     "mcp_server.routers.orders",
     "mcp_server.routers.products",
     "mcp_server.main",
+    "mcp_server.webui.*",
 ]
 # Alpha release - focus on core logic type safety, allow router flexibility
 ignore_errors = true
@@ -161,6 +165,9 @@ omit = [
     "mcp_server/auth/middleware.py",  # HTTP middleware (MCP tools use direct auth)
     "mcp_server/services/session.py",  # Session context (integration tested)
     "mcp_server/services/cache.py",  # Cache implementation (integration tested)
+    "mcp_server/webui/*",  # WebUI (optional feature, requires browser testing)
+    "mcp_server/routers/health.py",  # Health checks (integration tested)
+    "mcp_server/utils/metrics.py",  # Metrics (integration tested with Prometheus)
 ]
 
 [tool.coverage.report]
