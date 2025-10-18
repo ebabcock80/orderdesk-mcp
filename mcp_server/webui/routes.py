@@ -811,6 +811,13 @@ async def execute_tool(
 
         tool_func, param_model = tool_info
 
+        # Auto-authenticate using logged-in session's tenant_id
+        # This sets the tenant context so tools don't need separate authentication
+        from mcp_server.services.tenant import set_current_tenant_id
+
+        # Set tenant context from logged-in user
+        set_current_tenant_id(user["tenant_id"])
+
         # Execute tool
         start_time = time.perf_counter()
 
@@ -932,7 +939,7 @@ async def user_list_page(
             "total_stores": total_stores,
             "active_today": active_today,
             "search": search,
-            "current_user_id": user["id"],
+            "current_user_id": user["tenant_id"],
             "csrf_token": generate_csrf_token(),
         },
     )
@@ -973,7 +980,7 @@ async def user_details_page(
             "request": request,
             "user": user,
             "target_user": user_details,
-            "current_user_id": user["id"],
+            "current_user_id": user["tenant_id"],
             "now": datetime.now(UTC),
             "csrf_token": generate_csrf_token(),
         },
@@ -1000,7 +1007,7 @@ async def delete_user(
         Redirect to user list
     """
     # Prevent self-deletion
-    if user_id == user["id"]:
+    if user_id == user["tenant_id"]:
         logger.warning("User attempted to delete themselves", user_id=user_id)
         return RedirectResponse(
             url=f"/webui/users/{user_id}?error=cannot_delete_self",
@@ -1008,10 +1015,10 @@ async def delete_user(
         )
 
     user_service = UserService(db)
-    success = await user_service.delete_user(user_id, deleted_by=user["id"])
+    success = await user_service.delete_user(user_id, deleted_by=user["tenant_id"])
 
     if success:
-        logger.info("User deleted via WebUI", user_id=user_id, deleted_by=user["id"])
+        logger.info("User deleted via WebUI", user_id=user_id, deleted_by=user["tenant_id"])
         return RedirectResponse(
             url="/webui/users?success=user_deleted", status_code=303
         )
